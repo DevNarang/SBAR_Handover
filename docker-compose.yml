@@ -1,0 +1,26 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./sbar.db
+      SECRET_KEY: change-me-in-production-sbar-handover
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      STT_PROVIDER: ${STT_PROVIDER:-gemini}
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
+    volumes:
+      - ./backend:/app
+  web:
+    image: node:22-alpine
+    working_dir: /ui
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_PROXY: http://api:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/ui
+    depends_on:
+      - api

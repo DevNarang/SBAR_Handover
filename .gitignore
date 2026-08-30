@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+backend/sbar.db
+backend/.env
+frontend/node_modules
+__pycache__
+*.pyc
+.venv
+venv
+.pytest_cache
+backend/.pytest_cache
