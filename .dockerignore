@@ -1,0 +1,14 @@
+.git
+.github
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/dist
+backend/sbar.db
+backend/.env
+**/.env
+frontend/node_modules
+*.md
+TEST_CASES.md

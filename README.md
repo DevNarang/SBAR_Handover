@@ -40,6 +40,20 @@ Open [http://localhost:5173](http://localhost:5173). The Vite proxy forwards `/a
 docker compose up --build
 ```
 
+## Run online (Render)
+
+GitHub only stores the code. Render builds one public URL that serves the React app and the API together.
+
+1. Push this repo to GitHub (already: `https://github.com/DevNarang/SBAR_Handover`).
+2. Open [Render Dashboard](https://dashboard.render.com/) and sign in with GitHub.
+3. **New → Blueprint** and select `SBAR_Handover`. Render reads `render.yaml`.
+4. When prompted, paste `GEMINI_API_KEY` (optional; leave blank to use the local AI fallback).
+5. Create the service and wait until the deploy is live. Open the `*.onrender.com` URL.
+
+Demo logins are the same as local (`ChangeMe123!`). The free instance sleeps when idle, so the first load after a pause can take a minute. SQLite on the free plan is wiped when the service is rebuilt or migrated, so treat it as a demo, not a production hospital record.
+
+To deploy without a Blueprint: **New → Web Service** → this repo → Docker, with the root `Dockerfile`.
+
 ## Demo accounts
 
 Password for all: `ChangeMe123!`
@@ -90,7 +104,7 @@ Not in v1: offline sync, EMR integration, SSO.
 
 ## Production notes
 
-- Change `SECRET_KEY`.
+- Change `SECRET_KEY` (Render Blueprint generates one).
 - Point `DATABASE_URL` at PostgreSQL (SQLAlchemy URL) and install `psycopg2-binary` if you leave SQLite.
-- Keep `GEMINI_API_KEY` on the server only (already proxied).
-- Put TLS in front of the API and static UI.
+- Keep `GEMINI_API_KEY` on the server only (already proxied). Do not commit `.env`.
+- Put TLS in front of the API and static UI (Render provides HTTPS).
