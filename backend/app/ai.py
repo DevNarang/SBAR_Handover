@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 
 import httpx
 
@@ -37,6 +38,8 @@ def _google_key() -> str:
 
 
 def gemini_enabled() -> bool:
+    if os.environ.get("TESTING") == "1":
+        return False
     return bool(_google_key())
 
 

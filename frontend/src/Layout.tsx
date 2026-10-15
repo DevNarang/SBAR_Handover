@@ -20,7 +20,9 @@ const WORK_LINKS: NavItem[] = [
 ];
 
 const TAIL_LINKS: NavItem[] = [
+  { to: "/approvals", label: "Approvals", roles: ["hod", "nursing_superintendent"] },
   { to: "/audit", label: "Audit", roles: ["hod", "nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
+  { to: "/admin", label: "Wards", roles: ["hod"] },
   { to: "/admin", label: "Admin", roles: ["nursing_superintendent", "medical_superintendent"] },
 ];
 
@@ -32,7 +34,7 @@ function NavItems({ items }: { items: NavItem[] }) {
   return (
     <>
       {items.map((l) => (
-        <NavLink key={l.to} to={l.to} end={l.to === "/"} className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
+        <NavLink key={l.to + l.label} to={l.to} end={l.to === "/"} className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
           {l.label}
         </NavLink>
       ))}
@@ -45,7 +47,6 @@ export default function Layout() {
   const location = useLocation();
   const stored = localStorage.getItem("sbar_theme");
   const [theme, setTheme] = useState(stored === "dark" ? "dark" : "light");
-  const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
   const workActive = WORK_LINKS.some((l) => location.pathname === l.to || location.pathname.startsWith(l.to + "/"));
   const [workOpen, setWorkOpen] = useState(workActive);
 
@@ -57,22 +58,6 @@ export default function Layout() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("sbar_theme", theme);
   }, [theme]);
-
-  useEffect(() => {
-    function onToast(e: Event) {
-      const detail = (e as CustomEvent<{ title: string; body: string }>).detail;
-      if (!detail?.title) return;
-      setToast(detail);
-    }
-    window.addEventListener("sbar:toast", onToast);
-    return () => window.removeEventListener("sbar:toast", onToast);
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 8000);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   if (!user) return null;
   const top = visibleLinks(TOP_LINKS, user.role);
@@ -155,12 +140,6 @@ export default function Layout() {
       <main className="main">
         <Outlet />
       </main>
-      {toast && (
-        <div className="toast" role="status">
-          <strong>{toast.title}</strong>
-          <p>{toast.body}</p>
-        </div>
-      )}
     </div>
   );
 }

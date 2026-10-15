@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { notify, notifyError } from "../notify";
 
 type Task = {
   id: number;
@@ -32,9 +33,14 @@ export default function Tasks() {
             onClick={async () => {
               const first = rows[0];
               if (!title || !first) return;
-              await api.post("/tasks", { admission_id: first.admission_id, title, priority: "medium" });
-              setTitle("");
-              await load();
+              try {
+                await api.post("/tasks", { admission_id: first.admission_id, title, priority: "medium" });
+                notify("Task added", title);
+                setTitle("");
+                await load();
+              } catch (err) {
+                notifyError("Could not add task", err instanceof Error ? err.message : "Try again.");
+              }
             }}
           >
             Add on first patient
@@ -64,8 +70,13 @@ export default function Tasks() {
                   <select
                     value={t.status}
                     onChange={async (e) => {
-                      await api.patch(`/tasks/${t.id}`, { status: e.target.value });
-                      await load();
+                      try {
+                        await api.patch(`/tasks/${t.id}`, { status: e.target.value });
+                        notify("Task updated", `${t.title} is now ${e.target.value.replace("_", " ")}.`);
+                        await load();
+                      } catch (err) {
+                        notifyError("Could not update task", err instanceof Error ? err.message : "Try again.");
+                      }
                     }}
                   >
                     <option value="pending">Pending</option>

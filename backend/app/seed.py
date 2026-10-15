@@ -1,8 +1,10 @@
+import os
 from datetime import datetime, timedelta, date
 
 from sqlalchemy.orm import Session
 
 from app.models import (
+    AccountStatus,
     User,
     Ward,
     UserWardAssignment,
@@ -29,6 +31,24 @@ from app.security import hash_password
 from app.deps import current_shift
 
 DEMO_PASSWORD = "ChangeMe123!"
+SUPER_ADMIN_EMAIL = "jisa@hospital.local"
+SUPER_ADMIN_NAME = "Jisa"
+SUPER_ADMIN_EMPLOYEE_ID = "SA001"
+
+DEMO_EMAILS = {
+    "med.super@hospital.local",
+    "nursing.super@hospital.local",
+    "hod.surgical@hospital.local",
+    "supervisor.s1@hospital.local",
+    "supervisor.med@hospital.local",
+    "nurse.s1@hospital.local",
+    "nurse.s1.in@hospital.local",
+    "nurse.med@hospital.local",
+    "nurse.icu@hospital.local",
+}
+DEMO_WARD_NAMES = {"Surgical Ward 1", "Surgical Ward 2", "Medical Ward A", "ICU"}
+DEMO_WARD_PREFIXES = ("QA Ward ", "Day Ward ")
+DEMO_WARD_EXACT = DEMO_WARD_NAMES | {"Browser Check Ward"}
 
 SYSTEMS = [
     "respiratory",
@@ -721,17 +741,107 @@ CENSUS = [
 
 
 def seed_if_empty(db: Session, *, include_census: bool | None = None) -> None:
-    """Create users/wards on first run. Demo census only on first install (or when asked)."""
+    """Production: Super Admin only. Tests use seed_test_hospital via TESTING=1."""
+    if os.environ.get("TESTING") == "1":
+        if include_census:
+            seed_test_hospital(db, include_census=True)
+        return
+    _ensure_super_admin(db)
+    _purge_demo_accounts(db)
+    _purge_demo_wards(db)
+    db.commit()
+
+
+def seed_test_hospital(db: Session, *, include_census: bool = True) -> None:
+    """Staff, wards, and optional census for pytest only — never called from app lifespan."""
     first = not db.query(User).first()
     if first:
         _seed_core(db)
     else:
         _ensure_extra_staff(db)
-    if include_census is True or (include_census is None and first):
+    if include_census:
         _ensure_census(db)
     _ensure_protocols_tasks(db)
     _ensure_demo_roster(db)
+    for user in db.query(User).all():
+        user.account_status = AccountStatus.approved
+        user.is_active = True
     db.commit()
+
+
+def _ensure_super_admin(db: Session) -> None:
+    ns = db.query(User).filter(User.role == Role.nursing_superintendent).order_by(User.id).first()
+    legacy = db.query(User).filter(User.email == "nursing.super@hospital.local").first()
+    if legacy and (ns is None or ns.id == legacy.id):
+        ns = legacy
+        ns.email = SUPER_ADMIN_EMAIL
+        ns.full_name = SUPER_ADMIN_NAME
+        ns.employee_id = SUPER_ADMIN_EMPLOYEE_ID
+    if not ns:
+        ns = User(
+            email=SUPER_ADMIN_EMAIL,
+            employee_id=SUPER_ADMIN_EMPLOYEE_ID,
+            full_name=SUPER_ADMIN_NAME,
+            password_hash=hash_password(DEMO_PASSWORD),
+            role=Role.nursing_superintendent,
+            designation="Super Admin",
+            account_status=AccountStatus.approved,
+            is_active=True,
+        )
+        db.add(ns)
+        db.flush()
+        return
+    if ns.email in DEMO_EMAILS or ns.email == "nursing.super@hospital.local":
+        ns.email = SUPER_ADMIN_EMAIL
+        ns.full_name = SUPER_ADMIN_NAME
+        ns.employee_id = SUPER_ADMIN_EMPLOYEE_ID
+    ns.role = Role.nursing_superintendent
+    ns.account_status = AccountStatus.approved
+    ns.is_active = True
+    ns.designation = ns.designation or "Super Admin"
+    db.flush()
+
+
+def _purge_demo_accounts(db: Session) -> None:
+    demo_users = db.query(User).filter(User.email.in_(DEMO_EMAILS)).all()
+    if not demo_users:
+        return
+    from app.models import ShiftAssignment, Protocol
+
+    clear_clinical_data(db)
+    db.query(ShiftAssignment).delete()
+    db.query(Protocol).delete()
+    ids = [u.id for u in demo_users]
+    db.query(UserWardAssignment).filter(UserWardAssignment.user_id.in_(ids)).delete(synchronize_session=False)
+    db.query(ShiftAssignment).filter(ShiftAssignment.nurse_id.in_(ids)).delete(synchronize_session=False)
+    db.query(ShiftAssignment).filter(ShiftAssignment.assigned_by_id.in_(ids)).delete(synchronize_session=False)
+    db.query(User).filter(User.id.in_(ids)).delete(synchronize_session=False)
+    db.flush()
+
+
+def _is_demo_ward_name(name: str) -> bool:
+    if name in DEMO_WARD_EXACT:
+        return True
+    return any(name.startswith(prefix) for prefix in DEMO_WARD_PREFIXES)
+
+
+def _purge_demo_wards(db: Session) -> None:
+    from app.models import ShiftAssignment, WardShiftSignoff
+
+    wards = [w for w in db.query(Ward).all() if _is_demo_ward_name(w.name)]
+    if not wards:
+        return
+    ids = [w.id for w in wards]
+    db.query(User).filter(User.requested_ward_id.in_(ids)).update(
+        {User.requested_ward_id: None}, synchronize_session=False
+    )
+    db.query(UserWardAssignment).filter(UserWardAssignment.ward_id.in_(ids)).delete(synchronize_session=False)
+    db.query(ShiftAssignment).filter(ShiftAssignment.ward_id.in_(ids)).delete(synchronize_session=False)
+    db.query(WardShiftSignoff).filter(WardShiftSignoff.ward_id.in_(ids)).delete(synchronize_session=False)
+    db.query(Admission).filter(Admission.ward_id.in_(ids)).delete(synchronize_session=False)
+    for ward in wards:
+        db.delete(ward)
+    db.flush()
 
 
 def clear_clinical_data(db: Session) -> None:
@@ -809,6 +919,8 @@ def _ensure_extra_staff(db: Session) -> None:
                 full_name=name,
                 password_hash=hash_password(DEMO_PASSWORD),
                 role=role,
+                account_status=AccountStatus.approved,
+                is_active=True,
             )
             db.add(user)
             db.flush()
@@ -854,6 +966,8 @@ def _seed_core(db: Session) -> None:
             full_name="Dr. Asha Menon",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.medical_superintendent,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="nursing.super@hospital.local",
@@ -861,6 +975,8 @@ def _seed_core(db: Session) -> None:
             full_name="Matron Priya Shah",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_superintendent,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="hod.surgical@hospital.local",
@@ -869,6 +985,8 @@ def _seed_core(db: Session) -> None:
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.hod,
             department="Surgical",
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="supervisor.s1@hospital.local",
@@ -876,6 +994,8 @@ def _seed_core(db: Session) -> None:
             full_name="Sister Kavita Rao",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_supervisor,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="nurse.s1@hospital.local",
@@ -883,6 +1003,8 @@ def _seed_core(db: Session) -> None:
             full_name="Staff Nurse Anjali Nair",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_officer,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="nurse.med@hospital.local",
@@ -890,6 +1012,8 @@ def _seed_core(db: Session) -> None:
             full_name="Staff Nurse Imran Khan",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_officer,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="nurse.s1.in@hospital.local",
@@ -897,6 +1021,8 @@ def _seed_core(db: Session) -> None:
             full_name="Staff Nurse Rohan Pillai",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_officer,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="nurse.icu@hospital.local",
@@ -904,6 +1030,8 @@ def _seed_core(db: Session) -> None:
             full_name="Staff Nurse Rhea D'Souza",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_officer,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
         User(
             email="supervisor.med@hospital.local",
@@ -911,6 +1039,8 @@ def _seed_core(db: Session) -> None:
             full_name="Sister Deepa Menon",
             password_hash=hash_password(DEMO_PASSWORD),
             role=Role.nursing_supervisor,
+            account_status=AccountStatus.approved,
+            is_active=True,
         ),
     ]
     db.add_all(users)

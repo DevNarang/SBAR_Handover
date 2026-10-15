@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Ward } from "../api";
 import { useAuth } from "../auth";
+import { notify, notifyError } from "../notify";
 
 type Protocol = { id: number; title: string; body: string; ward_ids: number[] };
 
@@ -27,10 +28,15 @@ export default function Protocols() {
           style={{ marginBottom: 16 }}
           onSubmit={async (e) => {
             e.preventDefault();
-            await api.post("/protocols", { title, body, ward_ids: wards.map((w) => w.id) });
-            setTitle("");
-            setBody("");
-            await load();
+            try {
+              await api.post("/protocols", { title, body, ward_ids: wards.map((w) => w.id) });
+              notify("Protocol published", title);
+              setTitle("");
+              setBody("");
+              await load();
+            } catch (err) {
+              notifyError("Could not save protocol", err instanceof Error ? err.message : "Try again.");
+            }
           }}
         >
           <div className="field">

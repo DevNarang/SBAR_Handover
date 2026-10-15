@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Ward } from "../api";
+import { notify, notifyError } from "../notify";
 
 const SHIFTS = [
   { id: "morning", label: "Morning 07:00–14:00" },
@@ -66,6 +67,7 @@ export default function Roster() {
       if (!nurseId) {
         const existing = assigned(date, shift);
         if (existing) await api.delete(`/shift-assignments/${existing.id}`);
+        notify("Roster updated", `Shift ${shift} on ${date} is now unassigned.`);
       } else {
         await api.post("/shift-assignments", {
           ward_id: wardId,
@@ -73,11 +75,14 @@ export default function Roster() {
           shift_date: date,
           nurse_id: Number(nurseId),
         });
+        notify("Roster updated", `Officer assigned to ${shift} on ${date}.`);
       }
       await reload();
       setMsg("Roster saved.");
     } catch (e) {
-      setMsg(String(e));
+      const text = String(e);
+      setMsg(text);
+      notifyError("Roster not saved", text);
     }
   }
 

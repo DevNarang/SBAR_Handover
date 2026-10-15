@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { notify, notifyError } from "../notify";
 import { useAuth } from "../auth";
 
 type Handover = Record<string, unknown> & {
@@ -65,19 +66,18 @@ export default function HandoverForm() {
       const bed = saved.admission?.bed_number ? ` · Bed ${saved.admission.bed_number}` : "";
       const text = `SBAR submitted for ${name}${bed}. The incoming nurse can view it but cannot change this note.`;
       setMsg(text);
-      window.dispatchEvent(
-        new CustomEvent("sbar:toast", {
-          detail: { title: "SBAR submitted", body: text },
-        }),
-      );
+      notify("SBAR submitted", text);
     } catch (e) {
-      setMsg(String(e));
+      const text = String(e);
+      setMsg(text);
+      notifyError("Could not submit SBAR", text);
     }
   }
 
   async function review(action: "accept" | "return") {
     const saved = await api.post<Handover>(`/handovers/${h!.id}/review`, { action, comment: h?.review_comment });
     setH(saved);
+    notify(action === "accept" ? "SBAR accepted" : "SBAR returned", saved.patient?.name || "Handover updated.");
   }
 
   async function aiDraft() {
@@ -92,6 +92,7 @@ export default function HandoverForm() {
         nursing_care: parsed.nursing_care ?? h!.nursing_care,
       });
       setMsg("AI draft inserted. Review before submit — never auto-saved as final.");
+      notify("AI draft inserted", "Review the fields before you submit. This is not the final SBAR.");
     } catch {
       setMsg(r.draft);
     }
@@ -116,6 +117,7 @@ export default function HandoverForm() {
       const prev = String(h?.[voiceField] || "");
       await save({ [voiceField]: (prev ? prev + " " : "") + r.text });
       setMsg("Voice inserted into " + voiceField);
+      notify("Voice added", `Inserted into ${voiceField.replaceAll("_", " ")}.`);
     };
     rec.start();
     recRef.current = rec;
@@ -374,6 +376,7 @@ function EscalateButton({ handoverId }: { handoverId: number }) {
             onClick={async () => {
               await api.post("/escalations", { handover_id: handoverId, severity: "high", description });
               setOpen(false);
+              notify("Escalation sent", "A supervisor can now review this from Escalations.");
             }}
           >
             Send to supervisor

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import User, Ward, UserWardAssignment, Protocol, Role
+from app.models import AccountStatus, User, Ward, UserWardAssignment, Protocol, Role
 from app.schemas import UserCreate, UserUpdate, UserOut, WardIn, WardOut, ProtocolIn
 from app.security import hash_password
 from app.deps import get_current_user, require_roles, write_audit, ADMINS, SUPERINTENDENTS, user_ward_ids, ward_filter
@@ -45,7 +45,10 @@ def create_user(
         password_hash=hash_password(body.password),
         role=body.role,
         department=body.department,
+        mobile=body.mobile,
+        designation=body.designation,
         is_active=body.is_active,
+        account_status=AccountStatus.approved if body.is_active else AccountStatus.pending,
     )
     db.add(u)
     db.flush()
@@ -99,9 +102,23 @@ def create_ward(
     body: WardIn,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*ADMINS)),
+    user: User = Depends(get_current_user),
 ):
-    w = Ward(**body.model_dump())
+    if user.role not in ADMINS | {Role.hod}:
+        raise HTTPException(403, "Insufficient permissions")
+    data = body.model_dump()
+    data["name"] = (data.get("name") or "").strip()
+    if not data["name"]:
+        raise HTTPException(400, "Ward name is required")
+    if user.role == Role.hod:
+        if not (user.department or "").strip():
+            raise HTTPException(400, "Your account has no department")
+        data["department"] = user.department.strip()
+    elif data.get("department"):
+        data["department"] = data["department"].strip() or None
+    if db.query(Ward).filter(Ward.name == data["name"]).first():
+        raise HTTPException(400, "A ward with this name already exists")
+    w = Ward(**data)
     db.add(w)
     db.commit()
     db.refresh(w)

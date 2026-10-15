@@ -2,6 +2,11 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import Layout from "./Layout";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import SignupAdmin from "./pages/SignupAdmin";
+import SignupNurse from "./pages/SignupNurse";
+import Awaiting from "./pages/Awaiting";
+import Approvals from "./pages/Approvals";
 import Dashboard from "./pages/Dashboard";
 import WardBoard from "./pages/WardBoard";
 import HandoverForm from "./pages/HandoverForm";
@@ -13,6 +18,7 @@ import Reports from "./pages/Reports";
 import Audit from "./pages/Audit";
 import Admin from "./pages/Admin";
 import Roster from "./pages/Roster";
+import { ToastHost } from "./notify";
 import type { ReactNode } from "react";
 
 function Guard({ children }: { children: ReactNode }) {
@@ -28,6 +34,10 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/signup/admin" element={<SignupAdmin />} />
+          <Route path="/signup/nurse" element={<SignupNurse />} />
+          <Route path="/awaiting" element={<Awaiting />} />
           <Route
             path="/"
             element={
@@ -46,9 +56,11 @@ export default function App() {
             <Route path="reports" element={<Reports />} />
             <Route path="audit" element={<Audit />} />
             <Route path="admin" element={<Admin />} />
+            <Route path="approvals" element={<Approvals />} />
             <Route path="roster" element={<Roster />} />
           </Route>
         </Routes>
+        <ToastHost />
       </BrowserRouter>
     </AuthProvider>
   );

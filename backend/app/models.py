@@ -28,6 +28,12 @@ class Role(str, enum.Enum):
     nursing_officer = "nursing_officer"
 
 
+class AccountStatus:
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class ShiftType(str, enum.Enum):
     morning = "morning"
     afternoon = "afternoon"
@@ -94,6 +100,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role))
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mobile: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    designation: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    account_status: Mapped[str] = mapped_column(String(32), default=AccountStatus.approved)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_ward_id: Mapped[int | None] = mapped_column(ForeignKey("wards.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

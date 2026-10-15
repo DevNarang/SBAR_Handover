@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine, SessionLocal
-from app.routers import auth, admin, clinical, handovers, ops, roster
+from app.routers import auth, admin, clinical, handovers, ops, roster, approvals
 from app.seed import seed_if_empty
 
 Base.metadata.create_all(bind=engine)
@@ -24,6 +24,17 @@ def migrate_schema() -> None:
         sign_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(ward_shift_signoffs)")).fetchall()]
         if "outgoing_nurse_id" not in sign_cols:
             conn.execute(text("ALTER TABLE ward_shift_signoffs ADD COLUMN outgoing_nurse_id INTEGER"))
+        user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        extra = {
+            "mobile": "VARCHAR(32)",
+            "designation": "VARCHAR(128)",
+            "account_status": "VARCHAR(32) DEFAULT 'approved'",
+            "rejection_reason": "TEXT",
+            "requested_ward_id": "INTEGER",
+        }
+        for name, ddl in extra.items():
+            if name not in user_cols:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
 
 
 @asynccontextmanager
@@ -56,6 +67,7 @@ def _mount_api(prefix: str = "") -> None:
     app.include_router(handovers.router, prefix=prefix)
     app.include_router(ops.router, prefix=prefix)
     app.include_router(roster.router, prefix=prefix)
+    app.include_router(approvals.router, prefix=prefix)
 
 
 def resolve_ui_dir() -> Path | None:

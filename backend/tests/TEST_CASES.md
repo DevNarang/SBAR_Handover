@@ -153,16 +153,6 @@ Every submitted handover must persist and return:
 
 ---
 
-## Demo accounts (password `ChangeMe123!`)
+## Accounts
 
-| Role | Email |
-|------|--------|
-| Outgoing nurse, Surgical 1 | `nurse.s1@hospital.local` |
-| Incoming nurse, Surgical 1 | `nurse.s1.in@hospital.local` |
-| Medical officer | `nurse.med@hospital.local` |
-| ICU officer | `nurse.icu@hospital.local` |
-| Supervisor surgical | `supervisor.s1@hospital.local` |
-| Supervisor medical/ICU | `supervisor.med@hospital.local` |
-| HOD Surgical | `hod.surgical@hospital.local` |
-| Nursing Superintendent | `nursing.super@hospital.local` |
-| Medical Superintendent | `med.super@hospital.local` |
+Sign up as Department Admin or Nurse, then wait for approval. The only seeded login is Super Admin **Jisa** (`jisa@hospital.local` / `ChangeMe123!`). Create wards in Admin before nurses can join.

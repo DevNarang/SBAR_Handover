@@ -2,6 +2,7 @@ node_modules
 dist
 .DS_Store
 backend/sbar.db
+backend/test_sbar.db
 backend/.env
 frontend/node_modules
 __pycache__

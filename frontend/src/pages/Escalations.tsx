@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { notify, notifyError } from "../notify";
 
 type Esc = {
   id: number;
@@ -43,8 +44,15 @@ export default function Escalations() {
                 className="btn"
                 onClick={async () => {
                   setMsg("");
-                  await api.patch(`/escalations/${e.id}`, { status: "resolved", resolution_notes: "Resolved on ward" });
-                  await load();
+                  try {
+                    await api.patch(`/escalations/${e.id}`, { status: "resolved", resolution_notes: "Resolved on ward" });
+                    notify("Escalation resolved", `${e.patient_name || "Patient"} — marked resolved.`);
+                    await load();
+                  } catch (err) {
+                    const text = err instanceof Error ? err.message : "Could not resolve";
+                    setMsg(text);
+                    notifyError("Could not resolve", text);
+                  }
                 }}
               >
                 Mark resolved

@@ -33,11 +33,34 @@ class UserOut(BaseModel):
     full_name: str
     role: Role
     department: str | None
+    mobile: str | None = None
+    designation: str | None = None
+    account_status: str = "approved"
+    rejection_reason: str | None = None
+    requested_ward_id: int | None = None
     is_active: bool
     ward_ids: list[int] = []
 
     class Config:
         from_attributes = True
+
+
+class SignupRequest(BaseModel):
+    kind: str  # department_admin | nurse
+    full_name: str
+    employee_id: str
+    email: str
+    mobile: str
+    password: str
+    confirm_password: str
+    department: str | None = None
+    new_department: str | None = None
+    designation: str | None = None
+    ward_id: int | None = None
+
+
+class RejectRequest(BaseModel):
+    reason: str = Field(min_length=3)
 
 
 class UserCreate(BaseModel):
@@ -49,6 +72,8 @@ class UserCreate(BaseModel):
     department: str | None = None
     ward_ids: list[int] = []
     is_active: bool = True
+    mobile: str | None = None
+    designation: str | None = None
 
 
 class UserUpdate(BaseModel):

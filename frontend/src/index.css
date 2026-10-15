@@ -241,6 +241,7 @@ a { color: var(--teal); text-decoration: none; }
 }
 .toast strong { display: block; margin-bottom: 4px; color: var(--ink); }
 .toast p { margin: 0; font-size: 14px; }
+.toast.error { background: var(--crit-bg); color: var(--crit); border-color: var(--crit); }
 .notice.ok {
   background: var(--ok-bg);
   color: var(--ok);
@@ -287,8 +288,25 @@ tr:last-child td { border-bottom: 0; }
     radial-gradient(900px 400px at 10% -10%, #cfe8e2, transparent),
     var(--bg);
 }
-.login-card { width: min(440px, 100%); }
+.login-card { width: min(520px, 100%); }
 .login-card h2 { margin: 4px 0 6px; }
+.role-choice { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.role-card {
+  text-align: left; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg); padding: 16px; cursor: pointer;
+}
+.role-card:hover { border-color: var(--teal); }
+.role-card strong { display: block; margin-bottom: 4px; }
+.role-card span { color: var(--muted); font-size: 14px; }
+.approval-steps {
+  display: flex; justify-content: space-between; gap: 8px;
+  list-style: none; padding: 16px 0; margin: 0;
+}
+.approval-steps li {
+  flex: 1; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted);
+  border-top: 3px solid var(--line); padding-top: 8px;
+}
+.approval-steps li.done, .approval-steps li.current { color: var(--teal); border-top-color: var(--teal); }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
 .field input, .field select, .field textarea {

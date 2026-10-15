@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type Ward } from "../api";
 import { useAuth } from "../auth";
+import { notify, notifyError } from "../notify";
 
 const SHIFTS = [
   { id: "morning", label: "Morning 07:00–14:00" },
@@ -105,8 +106,11 @@ export default function WardBoard() {
       });
       setBoard(await api.get(`/wards/${wardId}/board?shift_type=${board.shift_type}`));
       setMsg("Shift received. Handover from outgoing nurse is complete.");
+      notify("Shift received", "Handover from the outgoing nurse is complete.");
     } catch (e) {
-      setMsg(String(e));
+      const text = String(e);
+      setMsg(text);
+      notifyError("Could not receive shift", text);
     }
   }
 

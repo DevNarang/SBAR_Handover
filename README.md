@@ -50,24 +50,21 @@ GitHub only stores the code. Render builds one public URL that serves the React 
 4. When prompted, paste `GEMINI_API_KEY` (optional; leave blank to use the local AI fallback).
 5. Create the service and wait until the deploy is live. Open the `*.onrender.com` URL.
 
-Demo logins are the same as local (`ChangeMe123!`). The free instance sleeps when idle, so the first load after a pause can take a minute. SQLite on the free plan is wiped when the service is rebuilt or migrated, so treat it as a demo, not a production hospital record.
+The free instance sleeps when idle, so the first load after a pause can take a minute. SQLite on the free plan is wiped when the service is rebuilt or migrated, so treat it as a demo, not a production hospital record.
 
 To deploy without a Blueprint: **New → Web Service** → this repo → Docker, with the root `Dockerfile`.
 
-## Demo accounts
+## Accounts
 
-Password for all: `ChangeMe123!`
+There are no demo nurses or census. The only seeded login is **Super Admin (Jisa)**. Everyone else signs up and waits for approval.
 
-| Role | Email |
-|------|--------|
-| Medical Superintendent | `med.super@hospital.local` |
-| Nursing Superintendent | `nursing.super@hospital.local` |
-| HOD (Surgical) | `hod.surgical@hospital.local` |
-| Nursing Supervisor | `supervisor.s1@hospital.local` |
-| Nursing Officer (Surgical 1, outgoing) | `nurse.s1@hospital.local` |
-| Nursing Officer (Surgical 1, incoming) | `nurse.s1.in@hospital.local` |
-| Nursing Officer (Medical) | `nurse.med@hospital.local` |
-| Nursing Officer (ICU) | `nurse.icu@hospital.local` |
+| Role | How they get in |
+|------|-----------------|
+| Super Admin | `jisa@hospital.local` / `ChangeMe123!` (change this password after first login) |
+| Department Admin | Sign up → Super Admin approves |
+| Nurse | Sign up (pick department + ward) → that department’s Admin approves |
+
+Create wards before nurses can join: Super Admin uses **Admin**; a Department Admin uses **Wards** (own department only). Then approve the nurse and roster the shift. Pending users only see the awaiting-approval screen.
 
 QA test cases: see `TEST_CASES.md`.
 

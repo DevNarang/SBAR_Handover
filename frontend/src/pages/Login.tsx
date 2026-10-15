@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
-
-const DEMOS = [
-  ["med.super@hospital.local", "Medical Superintendent"],
-  ["nursing.super@hospital.local", "Nursing Superintendent"],
-  ["hod.surgical@hospital.local", "HOD Surgical"],
-  ["supervisor.s1@hospital.local", "Supervisor"],
-  ["nurse.s1@hospital.local", "Nursing Officer (Surgical 1)"],
-];
+import { errorDetail } from "../api";
+import AuthBrand from "./AuthBrand";
 
 export default function Login() {
   const { user, login } = useAuth();
-  const [identifier, setIdentifier] = useState("nurse.s1@hospital.local");
-  const [password, setPassword] = useState("ChangeMe123!");
+  const navigate = useNavigate();
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -22,17 +17,9 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="card login-card">
-        <div className="brand" style={{ padding: 0 }}>
-          <div className="brand-mark">
-            <img src="/aiims-bibinagar.png" alt="AIIMS Bibinagar emblem" />
-          </div>
-          <div>
-            <h1>SBAR Handover</h1>
-            <p>All India Institute of Medical Sciences (AIIMS) - Bibinagar, Hyderabad</p>
-          </div>
-        </div>
+        <AuthBrand />
         <h2>Sign in</h2>
-        <p className="muted">Local staff accounts. Use your hospital email or employee ID.</p>
+        <p className="muted">Use your official email or employee ID. Access starts after approval.</p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -41,6 +28,11 @@ export default function Login() {
             try {
               await login(identifier, password);
             } catch (err) {
+              const detail = errorDetail(err) as { code?: string; reason?: string; message?: string; queue?: string; submitted_at?: string } | undefined;
+              if (detail && typeof detail === "object" && (detail.code === "pending" || detail.code === "rejected")) {
+                navigate("/awaiting", { replace: true, state: detail });
+                return;
+              }
               setError(err instanceof Error ? err.message : "Login failed");
             } finally {
               setBusy(false);
@@ -49,27 +41,20 @@ export default function Login() {
         >
           <div className="field">
             <label>Email or employee ID</label>
-            <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+            <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" required />
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
           </div>
           {error && <p className="error">{error}</p>}
           <button className="btn primary" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Signing in…" : "Enter ward"}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <div className="demo">
-          <strong>Demo password:</strong> ChangeMe123!
-          <div className="stack" style={{ marginTop: 8 }}>
-            {DEMOS.map(([email, label]) => (
-              <button key={email} type="button" className="btn" onClick={() => setIdentifier(email)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <p className="muted" style={{ marginTop: 16 }}>
+          New staff? <Link to="/signup">Create your account</Link>
+        </p>
       </div>
     </div>
   );
