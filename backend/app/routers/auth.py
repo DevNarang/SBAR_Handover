@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.clock import now as ist_now
 from app.database import get_db
 from app.models import AccountStatus, Role, User, LoginAttempt, Ward
 from app.schemas import LoginRequest, SignupRequest, Token, UserOut
@@ -95,7 +96,7 @@ def signup(body: SignupRequest, request: Request, db: Session = Depends(get_db))
 def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     ident = body.identifier.strip().lower()
     attempt = db.query(LoginAttempt).filter(LoginAttempt.identifier == ident).first()
-    if attempt and attempt.locked_until and attempt.locked_until > datetime.utcnow():
+    if attempt and attempt.locked_until and attempt.locked_until > ist_now():
         raise HTTPException(status_code=423, detail="Account locked. Try again in 15 minutes.")
 
     user = (
@@ -113,7 +114,7 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
             db.add(attempt)
         attempt.failed_count += 1
         if attempt.failed_count >= 5:
-            attempt.locked_until = datetime.utcnow() + timedelta(minutes=15)
+            attempt.locked_until = ist_now() + timedelta(minutes=15)
             attempt.failed_count = 0
         db.commit()
         write_audit(db, None, "login_failed", "user", ident, request=request)

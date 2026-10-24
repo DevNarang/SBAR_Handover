@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
 
@@ -36,7 +37,7 @@ export default function Escalations() {
               <span className={`badge ${e.severity === "critical" ? "critical" : "watch"}`}>{e.severity}</span>
               <span className={`badge ${e.status}`}>{e.status}</span>
               <strong>{e.patient_name}</strong>
-              <span className="muted">{new Date(e.created_at).toLocaleString()}</span>
+              <span className="muted">{formatIst(e.created_at)}</span>
             </div>
             <p>{e.description}</p>
             {e.status !== "resolved" && canResolve && (

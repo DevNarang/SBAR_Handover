@@ -1,9 +1,8 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.clock import now as ist_now
 from app.database import get_db
 from app.models import Patient, Admission, AdmissionStatus, User, Role
 from app.schemas import PatientIn, PatientOut, AdmissionIn, AdmissionOut, TransferIn
@@ -94,7 +93,7 @@ def transfer_admission(
     assert_ward_access(db, user, a.ward_id)
     assert_ward_access(db, user, body.ward_id)
     a.status = AdmissionStatus.transferred
-    a.discharged_at = datetime.utcnow()
+    a.discharged_at = ist_now()
     new_a = Admission(
         patient_id=a.patient_id,
         ward_id=body.ward_id,
@@ -128,7 +127,7 @@ def discharge(
         raise HTTPException(404, "Admission not found")
     assert_ward_access(db, user, a.ward_id)
     a.status = AdmissionStatus.discharged
-    a.discharged_at = datetime.utcnow()
+    a.discharged_at = ist_now()
     db.commit()
     write_audit(db, user, "discharge", "admission", a.id, request=request)
     return {"ok": True}

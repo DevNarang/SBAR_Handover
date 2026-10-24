@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ApprovalItem } from "../api";
+import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
 
@@ -79,7 +80,7 @@ export default function Approvals() {
               {row.ward_name ? ` · ${row.ward_name}` : ""}
             </p>
             <p className="muted">
-              Requested {row.created_at ? new Date(row.created_at).toLocaleString() : "—"} · {row.email} · {row.mobile || "—"}
+              Requested {formatIst(row.created_at)} · {row.email} · {row.mobile || "—"}
             </p>
             {row.rejection_reason && <p className="error">{row.rejection_reason}</p>}
             {status === "pending" && (

@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
+from app.clock import now as ist_now
 from app.config import settings
 from app.database import get_db
 from app.models import User, Role, UserWardAssignment, ShiftType, AuditLog, ShiftAssignment, Handover, HandoverStatus
@@ -18,7 +19,7 @@ ADMINS = SUPERINTENDENTS
 
 
 def current_shift(now: datetime | None = None) -> tuple[ShiftType, date]:
-    now = now or datetime.utcnow()
+    now = now or ist_now()
     hour = now.hour
     if settings.morning_start <= hour < settings.morning_end:
         return ShiftType.morning, now.date()

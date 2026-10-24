@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type Ward } from "../api";
+import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
 
@@ -205,7 +206,7 @@ export default function WardBoard() {
           {board.signoff ? (
             <p>
               <strong>{board.signoff.outgoing_nurse_name}</strong> handed this {board.shift_type} shift to{" "}
-              <strong>{board.signoff.signed_by_name}</strong> at {new Date(board.signoff.signed_at).toLocaleString()} ·{" "}
+              <strong>{board.signoff.signed_by_name}</strong> at {formatIst(board.signoff.signed_at)} ·{" "}
               {board.signoff.patient_count} patients
             </p>
           ) : (

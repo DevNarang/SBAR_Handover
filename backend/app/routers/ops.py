@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
+from app.clock import TIMEZONE_NAME, now as ist_now
 from app.config import settings
 from app.database import get_db
 from app.models import (
@@ -53,6 +54,7 @@ def meta_shift():
     return {
         "shift_type": st.value,
         "shift_date": str(sd),
+        "timezone": TIMEZONE_NAME,
         "hospital_name": settings.hospital_name,
         "windows": {
             "morning": f"{settings.morning_start:02d}:00–{settings.morning_end:02d}:00",
@@ -304,7 +306,7 @@ def update_escalation(
     if body.status:
         e.status = body.status
         if body.status == EscalationStatus.resolved:
-            e.resolved_at = datetime.utcnow()
+            e.resolved_at = ist_now()
     if body.assigned_to_id:
         e.assigned_to_id = body.assigned_to_id
     if body.resolution_notes is not None:
@@ -349,7 +351,7 @@ def list_tasks(db: Session = Depends(get_db), user: User = Depends(get_current_u
             "priority": t.priority,
             "status": t.status.value,
             "patient_name": t.admission.patient.name if t.admission and t.admission.patient else None,
-            "overdue": bool(t.due_at and t.due_at < datetime.utcnow() and t.status != TaskStatus.done),
+            "overdue": bool(t.due_at and t.due_at < ist_now() and t.status != TaskStatus.done),
         }
         for t in rows
     ]
@@ -417,7 +419,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         db.query(func.count(Task.id))
         .join(Admission)
         .filter(
-            Task.due_at < datetime.utcnow(),
+            Task.due_at < ist_now(),
             Task.status != TaskStatus.done,
             ward_filter(Admission.ward_id, allowed),
         )

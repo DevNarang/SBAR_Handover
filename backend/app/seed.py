@@ -1,6 +1,9 @@
 import os
 from datetime import datetime, timedelta, date
 
+from app.clock import now as ist_now
+from app.config import settings
+
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -31,9 +34,10 @@ from app.security import hash_password
 from app.deps import current_shift
 
 DEMO_PASSWORD = "ChangeMe123!"
-SUPER_ADMIN_EMAIL = "jisa@hospital.local"
+SUPER_ADMIN_EMAIL = settings.super_admin_email
 SUPER_ADMIN_NAME = "Jisa"
 SUPER_ADMIN_EMPLOYEE_ID = "SA001"
+SUPER_ADMIN_LEGACY_EMAILS = {"jisa@hospital.local", "nursing.super@hospital.local"}
 
 DEMO_EMAILS = {
     "med.super@hospital.local",
@@ -75,7 +79,7 @@ def vitals(temp, sbp, dbp, pr, rr, spo2):
         "pr": pr,
         "rr": rr,
         "spo2": spo2,
-        "recorded_at": datetime.utcnow().isoformat(),
+        "recorded_at": ist_now().isoformat(),
     }
 
 
@@ -770,19 +774,24 @@ def seed_test_hospital(db: Session, *, include_census: bool = True) -> None:
 
 
 def _ensure_super_admin(db: Session) -> None:
+    password = (settings.super_admin_password or "").strip()
     ns = db.query(User).filter(User.role == Role.nursing_superintendent).order_by(User.id).first()
-    legacy = db.query(User).filter(User.email == "nursing.super@hospital.local").first()
-    if legacy and (ns is None or ns.id == legacy.id):
+    legacy = (
+        db.query(User)
+        .filter(User.email.in_(SUPER_ADMIN_LEGACY_EMAILS | {SUPER_ADMIN_EMAIL}))
+        .order_by(User.id)
+        .first()
+    )
+    if legacy and (ns is None or ns.id == legacy.id or ns.email in SUPER_ADMIN_LEGACY_EMAILS):
         ns = legacy
-        ns.email = SUPER_ADMIN_EMAIL
-        ns.full_name = SUPER_ADMIN_NAME
-        ns.employee_id = SUPER_ADMIN_EMPLOYEE_ID
     if not ns:
+        if not password:
+            return
         ns = User(
             email=SUPER_ADMIN_EMAIL,
             employee_id=SUPER_ADMIN_EMPLOYEE_ID,
             full_name=SUPER_ADMIN_NAME,
-            password_hash=hash_password(DEMO_PASSWORD),
+            password_hash=hash_password(password),
             role=Role.nursing_superintendent,
             designation="Super Admin",
             account_status=AccountStatus.approved,
@@ -791,10 +800,11 @@ def _ensure_super_admin(db: Session) -> None:
         db.add(ns)
         db.flush()
         return
-    if ns.email in DEMO_EMAILS or ns.email == "nursing.super@hospital.local":
-        ns.email = SUPER_ADMIN_EMAIL
-        ns.full_name = SUPER_ADMIN_NAME
-        ns.employee_id = SUPER_ADMIN_EMPLOYEE_ID
+    ns.email = SUPER_ADMIN_EMAIL
+    ns.full_name = SUPER_ADMIN_NAME
+    ns.employee_id = SUPER_ADMIN_EMPLOYEE_ID
+    if password:
+        ns.password_hash = hash_password(password)
     ns.role = Role.nursing_superintendent
     ns.account_status = AccountStatus.approved
     ns.is_active = True
@@ -1138,9 +1148,9 @@ def _ensure_census(db: Session) -> None:
             diagnosis=row["diagnosis"],
             reason_for_admission=row["reason"],
             expected_discharge_date=row.get("discharge"),
-            submitted_at=datetime.utcnow() if status != HandoverStatus.draft else None,
+            submitted_at=ist_now() if status != HandoverStatus.draft else None,
             reviewed_by_id=sv.id if status in (HandoverStatus.accepted, HandoverStatus.returned) and sv else None,
-            reviewed_at=datetime.utcnow() if status in (HandoverStatus.accepted, HandoverStatus.returned) else None,
+            reviewed_at=ist_now() if status in (HandoverStatus.accepted, HandoverStatus.returned) else None,
             review_comment=row.get("review_comment"),
             **{k: v for k, v in sbar.items() if k in Handover.__table__.c.keys()},
         )
@@ -1225,7 +1235,7 @@ def _ensure_protocols_tasks(db: Session) -> None:
                     assignee_id=assignee.id if assignee else None,
                     created_by_id=sv.id if sv else assignee.id,
                     title=title,
-                    due_at=datetime.utcnow() + timedelta(hours=hours),
+                    due_at=ist_now() + timedelta(hours=hours),
                     priority="high",
                 )
             )

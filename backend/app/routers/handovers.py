@@ -32,6 +32,7 @@ from app.deps import (
     assert_can_edit_handover,
     assert_rostered_writer,
 )
+from app.clock import now as ist_now
 from app.risk import suggest_risk
 
 router = APIRouter(prefix="/handovers", tags=["handovers"])
@@ -298,7 +299,7 @@ def update_handover(
     suggested = suggest_risk(h.vitals, h.critical_flag)
     if "risk_level" not in data or not h.risk_override_reason:
         h.risk_level = suggested
-    h.updated_at = datetime.utcnow()
+    h.updated_at = ist_now()
     db.commit()
     write_audit(db, user, "update", "handover", h.id, request=request)
     return serialize(_load(db, h.id), user, db)
@@ -334,7 +335,7 @@ def submit(
     if missing:
         raise HTTPException(400, detail={"missing": missing})
     h.status = HandoverStatus.submitted
-    h.submitted_at = datetime.utcnow()
+    h.submitted_at = ist_now()
     h.author_id = user.id
     if h.critical_flag or h.risk_level == RiskLevel.critical:
         existing = (
@@ -382,7 +383,7 @@ def review(
     else:
         raise HTTPException(400, "action must be accept or return")
     h.reviewed_by_id = user.id
-    h.reviewed_at = datetime.utcnow()
+    h.reviewed_at = ist_now()
     h.review_comment = body.comment
     db.commit()
     write_audit(db, user, body.action, "handover", h.id, request=request)

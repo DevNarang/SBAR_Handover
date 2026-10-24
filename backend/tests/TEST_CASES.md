@@ -11,18 +11,15 @@ Use these cases for QA. Expected results are the pass criteria.
 
 | ID | Flow | Steps | Expected |
 |----|------|-------|----------|
-| AUTH-01 | Valid login | Enter email + `ChangeMe123!` | Lands on dashboard for that role |
+| AUTH-01 | Valid login | Sign in as an approved Super Admin, Department Admin, or Nurse | Lands on dashboard for that role |
 | AUTH-02 | Invalid password | Wrong password | Error; no session |
 | AUTH-03 | Lockout | Fail login 5 times | Account locked ~15 minutes |
 | AUTH-04 | Session | Idle past timeout | Must log in again |
-| AUTH-05 | Officer scope | Login `nurse.s1@hospital.local` | Only Surgical Ward 1 patients |
-| AUTH-06 | Incoming officer | Login `nurse.s1.in@hospital.local` | Same ward, can **receive** Anjali’s shift |
-| AUTH-07 | Medical officer | Login `nurse.med@hospital.local` | Medical Ward A only |
-| AUTH-08 | ICU officer | Login `nurse.icu@hospital.local` | ICU only |
-| AUTH-09 | Supervisor | Login `supervisor.s1@hospital.local` | Surgical wards 1–2; review + receive |
-| AUTH-10 | HOD | Login `hod.surgical@hospital.local` | Surgical department wards |
-| AUTH-11 | Superintendents | Med / Nursing super accounts | All wards, admin, analytics |
-| AUTH-12 | Inactive user | Deactivate user in Admin, login | Rejected |
+| AUTH-05 | Officer scope | Sign in as a nurse assigned to one ward | Only that ward’s patients |
+| AUTH-06 | Incoming officer | Sign in as the rostered incoming nurse | Same ward, can **receive** the outgoing shift |
+| AUTH-07 | Department scope | Sign in as Department Admin | Wards and nurses in that department only |
+| AUTH-08 | Super Admin | Sign in as Super Admin | All wards, admin, analytics, approvals |
+| AUTH-09 | Inactive user | Deactivate user in Admin, login | Rejected |
 
 ---
 
@@ -42,8 +39,7 @@ Use these cases for QA. Expected results are the pass criteria.
 
 ## 3. Nurse-to-nurse handover (core flow)
 
-Outgoing demo: **Anjali Nair** `nurse.s1@hospital.local`  
-Incoming demo: **Rohan Pillai** `nurse.s1.in@hospital.local`
+Use an approved outgoing nurse and a different rostered incoming nurse on the same ward.
 
 | ID | Flow | Steps | Expected |
 |----|------|-------|----------|
@@ -155,4 +151,4 @@ Every submitted handover must persist and return:
 
 ## Accounts
 
-Sign up as Department Admin or Nurse, then wait for approval. The only seeded login is Super Admin **Jisa** (`jisa@hospital.local` / `ChangeMe123!`). Create wards in Admin before nurses can join.
+Sign up as Department Admin or Nurse, then wait for approval. Super Admin credentials are issued separately (not listed here). Create wards in Admin before nurses can join. Shift times use IST.

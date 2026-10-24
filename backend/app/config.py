@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     google_stt_api_key: str = ""
     google_medical_stt_model: str = "medical_dictation"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    super_admin_email: str = "jisagt@gmail.com"
+    super_admin_password: str = ""
 
     morning_start: int = 7
     morning_end: int = 14

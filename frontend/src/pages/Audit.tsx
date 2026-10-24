@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { formatIst } from "../clock";
 
 type Row = { id: number; action: string; entity_type: string; entity_id: string; created_at: string; user_id: number | null };
 
@@ -27,7 +28,7 @@ export default function Audit() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td>{new Date(r.created_at).toLocaleString()}</td>
+                <td>{formatIst(r.created_at)}</td>
                 <td>{r.user_id ?? "—"}</td>
                 <td>{r.action}</td>
                 <td>{r.entity_type}</td>

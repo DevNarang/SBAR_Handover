@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { nowIstIso } from "../clock";
 import { notify, notifyError } from "../notify";
 import { useAuth } from "../auth";
 
@@ -260,7 +261,7 @@ export default function HandoverForm() {
                   type="number"
                   value={vitals[k] ?? ""}
                   onChange={(e) => {
-                    const next = { ...vitals, [k]: e.target.value === "" ? null : Number(e.target.value), recorded_at: new Date().toISOString() };
+                    const next = { ...vitals, [k]: e.target.value === "" ? null : Number(e.target.value), recorded_at: nowIstIso() };
                     setH({ ...h, vitals: next });
                   }}
                   onBlur={() => save({ vitals })}

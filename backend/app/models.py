@@ -1,6 +1,8 @@
 import enum
 from datetime import datetime, date, time
 
+from app.clock import now as ist_now
+
 from sqlalchemy import (
     Boolean,
     Date,
@@ -106,7 +108,7 @@ class User(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     requested_ward_id: Mapped[int | None] = mapped_column(ForeignKey("wards.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     ward_assignments: Mapped[list["UserWardAssignment"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -144,7 +146,7 @@ class ShiftAssignment(Base):
     shift_date: Mapped[date] = mapped_column(Date)
     nurse_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     assigned_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     ward: Mapped[Ward] = relationship()
     nurse: Mapped[User] = relationship(foreign_keys=[nurse_id])
@@ -159,7 +161,7 @@ class Patient(Base):
     age: Mapped[int] = mapped_column(Integer)
     sex: Mapped[Sex] = mapped_column(Enum(Sex))
     mrn: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     admissions: Mapped[list["Admission"]] = relationship(back_populates="patient")
 
@@ -174,7 +176,7 @@ class Admission(Base):
     diagnosis: Mapped[str] = mapped_column(Text)
     reason_for_admission: Mapped[str] = mapped_column(Text)
     status: Mapped[AdmissionStatus] = mapped_column(Enum(AdmissionStatus), default=AdmissionStatus.active)
-    admitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    admitted_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
     discharged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     patient: Mapped[Patient] = relationship(back_populates="admissions")
@@ -198,8 +200,8 @@ class Handover(Base):
     reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now, onupdate=ist_now)
 
     # Situation
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -246,7 +248,7 @@ class Escalation(Base):
     status: Mapped[EscalationStatus] = mapped_column(Enum(EscalationStatus), default=EscalationStatus.open)
     description: Mapped[str] = mapped_column(Text)
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     handover: Mapped[Handover] = relationship()
@@ -265,7 +267,7 @@ class Task(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     priority: Mapped[str] = mapped_column(String(16), default="medium")
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.pending)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     admission: Mapped[Admission] = relationship()
     assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_id])
@@ -282,7 +284,7 @@ class WardShiftSignoff(Base):
     shift_date: Mapped[date] = mapped_column(Date)
     signed_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     outgoing_nurse_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    signed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     patient_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -299,7 +301,7 @@ class Protocol(Base):
     body: Mapped[str] = mapped_column(Text)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     ward_ids: Mapped[list | None] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     created_by: Mapped[User] = relationship()
 
@@ -314,7 +316,7 @@ class AuditLog(Base):
     entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     diff: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     user: Mapped[User | None] = relationship()
 
@@ -326,7 +328,7 @@ class AiUsageLog(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     handover_id: Mapped[int | None] = mapped_column(ForeignKey("handovers.id"), nullable=True)
     feature: Mapped[str] = mapped_column(String(32))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
 
 class LoginAttempt(Base):

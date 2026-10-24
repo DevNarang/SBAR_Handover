@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { formatIst } from "../clock";
 import { notify, notifyError } from "../notify";
 
 type Task = {
@@ -65,7 +66,7 @@ export default function Tasks() {
                 <td>{t.title}</td>
                 <td>{t.patient_name}</td>
                 <td>{t.priority}</td>
-                <td>{t.due_at ? new Date(t.due_at).toLocaleString() : "—"} {t.overdue && <span className="badge critical">overdue</span>}</td>
+                <td>{t.due_at ? formatIst(t.due_at) : "—"} {t.overdue && <span className="badge critical">overdue</span>}</td>
                 <td>
                   <select
                     value={t.status}

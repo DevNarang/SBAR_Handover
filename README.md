@@ -47,7 +47,7 @@ GitHub only stores the code. Render builds one public URL that serves the React 
 1. Push this repo to GitHub (already: `https://github.com/DevNarang/SBAR_Handover`).
 2. Open [Render Dashboard](https://dashboard.render.com/) and sign in with GitHub.
 3. **New → Blueprint** and select `SBAR_Handover`. Render reads `render.yaml`.
-4. When prompted, paste `GEMINI_API_KEY` (optional; leave blank to use the local AI fallback).
+4. When prompted, paste `GEMINI_API_KEY` (optional; leave blank to use the local AI fallback) and `SUPER_ADMIN_PASSWORD` (required for the seeded Super Admin).
 5. Create the service and wait until the deploy is live. Open the `*.onrender.com` URL.
 
 The free instance sleeps when idle, so the first load after a pause can take a minute. SQLite on the free plan is wiped when the service is rebuilt or migrated, so treat it as a demo, not a production hospital record.
@@ -56,15 +56,15 @@ To deploy without a Blueprint: **New → Web Service** → this repo → Docker,
 
 ## Accounts
 
-There are no demo nurses or census. The only seeded login is **Super Admin (Jisa)**. Everyone else signs up and waits for approval.
+There are no demo nurses or census. Super Admin is seeded on first run (credentials are issued separately, not stored in this README). Everyone else signs up and waits for approval.
 
 | Role | How they get in |
 |------|-----------------|
-| Super Admin | `jisa@hospital.local` / `ChangeMe123!` (change this password after first login) |
+| Super Admin | Seeded account; issued privately |
 | Department Admin | Sign up → Super Admin approves |
 | Nurse | Sign up (pick department + ward) → that department’s Admin approves |
 
-Create wards before nurses can join: Super Admin uses **Admin**; a Department Admin uses **Wards** (own department only). Then approve the nurse and roster the shift. Pending users only see the awaiting-approval screen.
+Create wards before nurses can join: Super Admin uses **Admin**; a Department Admin uses **Wards** (own department only). Then approve the nurse and roster the shift. Pending users only see the awaiting-approval screen. Shift times and saved timestamps use **IST (Asia/Kolkata)**.
 
 QA test cases: see `TEST_CASES.md`.
 
