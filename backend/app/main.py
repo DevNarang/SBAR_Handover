@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine, SessionLocal
-from app.routers import auth, admin, clinical, handovers, ops, roster, approvals
+from app.routers import auth, admin, clinical, handovers, ops, roster, approvals, notifications
 from app.seed import seed_if_empty
 
 Base.metadata.create_all(bind=engine)
@@ -35,6 +35,34 @@ def migrate_schema() -> None:
         for name, ddl in extra.items():
             if name not in user_cols:
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
+        shift_sql = conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='shift_assignments'")).scalar()
+        if shift_sql and "nurse_id" in shift_sql and "UNIQUE (ward_id, shift_type, shift_date, nurse_id)" not in shift_sql.replace('"', ""):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE shift_assignments_new (
+                        id INTEGER PRIMARY KEY,
+                        ward_id INTEGER NOT NULL,
+                        shift_type VARCHAR(32) NOT NULL,
+                        shift_date DATE NOT NULL,
+                        nurse_id INTEGER NOT NULL,
+                        assigned_by_id INTEGER NOT NULL,
+                        created_at DATETIME,
+                        UNIQUE (ward_id, shift_type, shift_date, nurse_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO shift_assignments_new (id, ward_id, shift_type, shift_date, nurse_id, assigned_by_id, created_at)
+                    SELECT id, ward_id, shift_type, shift_date, nurse_id, assigned_by_id, created_at FROM shift_assignments
+                    """
+                )
+            )
+            conn.execute(text("DROP TABLE shift_assignments"))
+            conn.execute(text("ALTER TABLE shift_assignments_new RENAME TO shift_assignments"))
 
 
 @asynccontextmanager
@@ -68,6 +96,7 @@ def _mount_api(prefix: str = "") -> None:
     app.include_router(ops.router, prefix=prefix)
     app.include_router(roster.router, prefix=prefix)
     app.include_router(approvals.router, prefix=prefix)
+    app.include_router(notifications.router, prefix=prefix)
 
 
 def resolve_ui_dir() -> Path | None:

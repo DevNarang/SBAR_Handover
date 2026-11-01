@@ -2,6 +2,7 @@ from datetime import date, datetime
 from copy import deepcopy
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -17,6 +18,8 @@ from app.models import (
     Escalation,
     EscalationSeverity,
     EscalationStatus,
+    Task,
+    WardShiftSignoff,
 )
 from app.schemas import HandoverUpdate, ReviewIn
 from app.deps import (
@@ -34,6 +37,8 @@ from app.deps import (
 )
 from app.clock import now as ist_now
 from app.risk import suggest_risk
+from app.events import record_event
+from app.pdf_reports import handover_pdf
 
 router = APIRouter(prefix="/handovers", tags=["handovers"])
 
@@ -231,7 +236,7 @@ def ensure_handover(
     )
     if existing:
         return serialize(_load(db, existing.id), user, db)
-    assert_rostered_writer(db, user, admission.ward_id, shift_type, shift_date)
+    assert_rostered_writer(db, user, admission.ward_id, shift_type, shift_date, admission.id)
     prev = _previous_handover(db, admission_id, shift_type, shift_date)
     carried = {}
     if prev:
@@ -293,6 +298,7 @@ def update_handover(
         raise HTTPException(404, "Not found")
     assert_ward_access(db, user, h.admission.ward_id)
     assert_can_edit_handover(db, user, h)
+    previous_risk = h.risk_level
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(h, k, v)
@@ -300,6 +306,16 @@ def update_handover(
     if "risk_level" not in data or not h.risk_override_reason:
         h.risk_level = suggested
     h.updated_at = ist_now()
+    if h.risk_level == RiskLevel.critical and previous_risk != RiskLevel.critical:
+        record_event(
+            db,
+            kind="critical_vital",
+            title="Critical vital",
+            body=f"{h.admission.patient.name} is critical on {h.shift_type.value} {h.shift_date}",
+            patient_id=h.admission.patient_id,
+            ward_id=h.admission.ward_id,
+            entity_key=f"critical:{h.id}:{h.updated_at.isoformat()}",
+        )
     db.commit()
     write_audit(db, user, "update", "handover", h.id, request=request)
     return serialize(_load(db, h.id), user, db)
@@ -354,6 +370,15 @@ def submit(
                 )
             )
             db.flush()
+    record_event(
+        db,
+        kind="handover_submitted",
+        title="Handover submitted",
+        body=f"{h.admission.patient.name} · {h.shift_type.value} {h.shift_date}",
+        patient_id=h.admission.patient_id,
+        ward_id=h.admission.ward_id,
+        entity_key=f"submit:{h.id}:{h.submitted_at.isoformat() if h.submitted_at else ''}",
+    )
     db.commit()
     write_audit(db, user, "submit", "handover", h.id, request=request)
     if h.critical_flag or h.risk_level == RiskLevel.critical:
@@ -385,6 +410,49 @@ def review(
     h.reviewed_by_id = user.id
     h.reviewed_at = ist_now()
     h.review_comment = body.comment
+    if body.action == "return":
+        record_event(
+            db,
+            kind="handover_returned",
+            title="Handover returned",
+            body=body.comment or f"{h.admission.patient.name} was returned for changes",
+            patient_id=h.admission.patient_id,
+            ward_id=h.admission.ward_id,
+        )
     db.commit()
     write_audit(db, user, body.action, "handover", h.id, request=request)
     return serialize(_load(db, h.id), user, db)
+
+
+@router.get("/{handover_id}/report.pdf")
+def handover_report(
+    handover_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    h = _load(db, handover_id)
+    if not h:
+        raise HTTPException(404, "Not found")
+    assert_ward_access(db, user, h.admission.ward_id)
+    signoff = (
+        db.query(WardShiftSignoff)
+        .options(joinedload(WardShiftSignoff.signed_by))
+        .filter(
+            WardShiftSignoff.ward_id == h.admission.ward_id,
+            WardShiftSignoff.shift_type == h.shift_type,
+            WardShiftSignoff.shift_date == h.shift_date,
+        )
+        .first()
+    )
+    escalations = db.query(Escalation).filter(Escalation.handover_id == h.id).all()
+    tasks = db.query(Task).filter(Task.admission_id == h.admission_id).all()
+    payload = handover_pdf(
+        serialize(h, user, db),
+        {
+            "received_by": signoff.signed_by.full_name if signoff and signoff.signed_by else None,
+            "escalations": "; ".join(e.description for e in escalations) or None,
+            "tasks": "; ".join(t.title for t in tasks) or None,
+        },
+    )
+    filename = f"sbar-{h.admission.patient.name}-{h.shift_date}.pdf".replace(" ", "-")
+    return Response(content=payload, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})

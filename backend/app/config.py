@@ -19,12 +19,12 @@ class Settings(BaseSettings):
     super_admin_email: str = "jisagt@gmail.com"
     super_admin_password: str = ""
 
-    morning_start: int = 7
+    morning_start: int = 8
     morning_end: int = 14
     afternoon_start: int = 14
-    afternoon_end: int = 21
-    evening_start: int = 21
-    evening_end: int = 7
+    afternoon_end: int = 20
+    evening_start: int = 20
+    evening_end: int = 8
 
 
 settings = Settings()

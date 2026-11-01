@@ -5,7 +5,17 @@ from app.database import get_db
 from app.models import AccountStatus, User, Ward, UserWardAssignment, Protocol, Role
 from app.schemas import UserCreate, UserUpdate, UserOut, WardIn, WardOut, ProtocolIn
 from app.security import hash_password
-from app.deps import get_current_user, require_roles, write_audit, ADMINS, SUPERINTENDENTS, user_ward_ids, ward_filter
+from app.deps import (
+    get_current_user,
+    require_roles,
+    write_audit,
+    ADMINS,
+    SUPERINTENDENTS,
+    HOSPITAL_WIDE,
+    ASSIGNABLE_ROLES,
+    user_ward_ids,
+    ward_filter,
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -23,7 +33,7 @@ def _user_out(db: Session, user: User) -> UserOut:
 @router.get("/users", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*ADMINS)),
+    user: User = Depends(require_roles(*HOSPITAL_WIDE)),
 ):
     users = db.query(User).options(joinedload(User.ward_assignments)).all()
     return [_user_out(db, u) for u in users]
@@ -34,8 +44,10 @@ def create_user(
     body: UserCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*ADMINS)),
+    user: User = Depends(require_roles(*HOSPITAL_WIDE)),
 ):
+    if body.role not in ASSIGNABLE_ROLES:
+        raise HTTPException(400, "That role cannot be assigned here")
     if db.query(User).filter((User.email == body.email) | (User.employee_id == body.employee_id)).first():
         raise HTTPException(400, "Email or employee ID already exists")
     u = User(
@@ -71,7 +83,11 @@ def update_user(
     u = db.get(User, user_id)
     if not u:
         raise HTTPException(404, "User not found")
+    if u.role == Role.nursing_superintendent:
+        raise HTTPException(403, "The Super Admin account is locked")
     data = body.model_dump(exclude_unset=True)
+    if data.get("role") == Role.nursing_superintendent or data.get("role") not in (None, *ASSIGNABLE_ROLES):
+        raise HTTPException(400, "That role cannot be assigned here")
     ward_ids = data.pop("ward_ids", None)
     password = data.pop("password", None)
     for k, v in data.items():
@@ -92,7 +108,7 @@ def update_user(
 def list_wards(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ids = user_ward_ids(db, user)
     q = db.query(Ward)
-    if user.role not in SUPERINTENDENTS:
+    if user.role not in HOSPITAL_WIDE:
         q = q.filter(ward_filter(Ward.id, ids))
     return q.order_by(Ward.name).all()
 
@@ -104,7 +120,7 @@ def create_ward(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if user.role not in ADMINS | {Role.hod}:
+    if user.role not in HOSPITAL_WIDE | {Role.hod}:
         raise HTTPException(403, "Insufficient permissions")
     data = body.model_dump()
     data["name"] = (data.get("name") or "").strip()

@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { api, ROLE_LABEL, type User, type Ward } from "../api";
 import { useAuth } from "../auth";
+import PasswordField from "../PasswordField";
 import { notify, notifyError } from "../notify";
+
+const ASSIGNABLE = ["nursing_officer", "hod", "nursing_supervisor", "medical_superintendent"];
 
 export default function Admin() {
   const { user } = useAuth();
   const isHod = user?.role === "hod";
+  const canManage = user?.role === "nursing_superintendent" || user?.role === "medical_superintendent";
   const [users, setUsers] = useState<User[]>([]);
   const [wards, setWards] = useState<Ward[]>([]);
   const [wardName, setWardName] = useState("");
@@ -58,13 +62,19 @@ export default function Admin() {
             {(["full_name", "email", "employee_id", "password"] as const).map((k) => (
               <div className="field" key={k}>
                 <label>{k.replace("_", " ")}</label>
-                <input value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} required />
+                {k === "password" ? (
+                  <PasswordField value={form.password} onChange={(value) => setForm({ ...form, password: value })} required autoComplete="new-password" />
+                ) : (
+                  <input value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} required />
+                )}
               </div>
             ))}
             <div className="field">
               <label>Role</label>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {Object.entries(ROLE_LABEL).map(([k, v]) => (
+                {Object.entries(ROLE_LABEL)
+                  .filter(([k]) => ASSIGNABLE.includes(k))
+                  .map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
@@ -149,6 +159,7 @@ export default function Admin() {
                   <th>Role</th>
                   <th>Email</th>
                   <th>Active</th>
+                  {canManage && <th></th>}
                 </>
               )}
             </tr>
@@ -162,14 +173,63 @@ export default function Admin() {
                     <td>{w.is_active ? "Yes" : "No"}</td>
                   </tr>
                 ))
-              : users.map((u) => (
+              : users.map((u) => {
+                  const locked = u.role === "nursing_superintendent";
+                  return (
                   <tr key={u.id}>
                     <td>{u.full_name}</td>
-                    <td>{ROLE_LABEL[u.role]}</td>
+                    <td>
+                      {canManage && !locked ? (
+                        <select
+                          value={u.role}
+                          onChange={async (e) => {
+                            try {
+                              await api.patch(`/users/${u.id}`, { role: e.target.value });
+                              notify("Role updated", `${u.full_name} is now ${ROLE_LABEL[e.target.value]}.`);
+                              await load();
+                            } catch (err) {
+                              notifyError("Could not change role", err instanceof Error ? err.message : "Try again.");
+                            }
+                          }}
+                        >
+                          {ASSIGNABLE.map((role) => (
+                            <option key={role} value={role}>
+                              {ROLE_LABEL[role]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        ROLE_LABEL[u.role]
+                      )}
+                    </td>
                     <td>{u.email}</td>
-                    <td>{u.is_active ? "Yes" : "No"}</td>
+                    <td>
+                      {canManage && !locked ? (
+                        <input
+                          type="checkbox"
+                          checked={u.is_active}
+                          onChange={async (e) => {
+                            try {
+                              await api.patch(`/users/${u.id}`, { is_active: e.target.checked });
+                              notify(e.target.checked ? "User activated" : "User deactivated", u.full_name);
+                              await load();
+                            } catch (err) {
+                              notifyError("Could not update user", err instanceof Error ? err.message : "Try again.");
+                            }
+                          }}
+                        />
+                      ) : locked ? (
+                        "Locked"
+                      ) : u.is_active ? (
+                        "Yes"
+                      ) : (
+                        "No"
+                      )}
+                    </td>
+                    {canManage && <td>{locked ? "Super Admin" : ""}</td>}
                   </tr>
-                ))}
+                  );
+                })}
           </tbody>
         </table>
       </div>

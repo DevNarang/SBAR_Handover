@@ -10,6 +10,7 @@ const TOP_LINKS: NavItem[] = [
 ];
 
 const WORK_LINKS: NavItem[] = [
+  { to: "/notifications", label: "Notifications", roles: null },
   { to: "/ward", label: "Ward board", roles: null },
   { to: "/roster", label: "Shift roster", roles: ["hod", "nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
   { to: "/patients", label: "Patients", roles: null },
@@ -23,7 +24,8 @@ const TAIL_LINKS: NavItem[] = [
   { to: "/approvals", label: "Approvals", roles: ["hod", "nursing_superintendent"] },
   { to: "/audit", label: "Audit", roles: ["hod", "nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
   { to: "/admin", label: "Wards", roles: ["hod"] },
-  { to: "/admin", label: "Admin", roles: ["nursing_superintendent", "medical_superintendent"] },
+  { to: "/account", label: "Password", roles: null },
+  { to: "/admin", label: "Admin", roles: ["nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
 ];
 
 function visibleLinks(items: NavItem[], role: string) {

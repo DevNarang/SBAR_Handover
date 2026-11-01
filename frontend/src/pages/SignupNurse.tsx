@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type SignupOptions } from "../api";
+import PasswordField from "../PasswordField";
 import AuthBrand from "./AuthBrand";
 import { notify } from "../notify";
 
@@ -100,11 +101,11 @@ export default function SignupNurse() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} required minLength={8} />
+            <PasswordField value={form.password} onChange={(value) => set("password", value)} required minLength={8} autoComplete="new-password" />
           </div>
           <div className="field">
             <label>Confirm password</label>
-            <input type="password" value={form.confirm_password} onChange={(e) => set("confirm_password", e.target.value)} required />
+            <PasswordField value={form.confirm_password} onChange={(value) => set("confirm_password", value)} required autoComplete="new-password" />
           </div>
           {error && <p className="error">{error}</p>}
           <button className="btn primary" disabled={busy || options.wards.length === 0} style={{ width: "100%" }}>

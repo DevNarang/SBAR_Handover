@@ -138,7 +138,7 @@ class UserWardAssignment(Base):
 
 class ShiftAssignment(Base):
     __tablename__ = "shift_assignments"
-    __table_args__ = (UniqueConstraint("ward_id", "shift_type", "shift_date"),)
+    __table_args__ = (UniqueConstraint("ward_id", "shift_type", "shift_date", "nurse_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ward_id: Mapped[int] = mapped_column(ForeignKey("wards.id"))
@@ -149,6 +149,23 @@ class ShiftAssignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     ward: Mapped[Ward] = relationship()
+    nurse: Mapped[User] = relationship(foreign_keys=[nurse_id])
+    assigned_by: Mapped[User] = relationship(foreign_keys=[assigned_by_id])
+
+
+class PatientShiftAssignment(Base):
+    __tablename__ = "patient_shift_assignments"
+    __table_args__ = (UniqueConstraint("admission_id", "shift_type", "shift_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admission_id: Mapped[int] = mapped_column(ForeignKey("admissions.id"))
+    shift_type: Mapped[ShiftType] = mapped_column(Enum(ShiftType))
+    shift_date: Mapped[date] = mapped_column(Date)
+    nurse_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    assigned_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
+
+    admission: Mapped["Admission"] = relationship()
     nurse: Mapped[User] = relationship(foreign_keys=[nurse_id])
     assigned_by: Mapped[User] = relationship(foreign_keys=[assigned_by_id])
 
@@ -319,6 +336,32 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
     user: Mapped[User | None] = relationship()
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text, default="")
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), nullable=True)
+    ward_id: Mapped[int | None] = mapped_column(ForeignKey("wards.id"), nullable=True)
+    entity_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
+
+    patient: Mapped["Patient | None"] = relationship()
+    ward: Mapped["Ward | None"] = relationship()
+
+
+class NotificationRead(Base):
+    __tablename__ = "notification_reads"
+    __table_args__ = (UniqueConstraint("user_id", "notification_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id"))
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=ist_now)
 
 
 class AiUsageLog(Base):

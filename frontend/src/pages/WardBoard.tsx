@@ -4,12 +4,7 @@ import { api, type Ward } from "../api";
 import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
-
-const SHIFTS = [
-  { id: "morning", label: "Morning 07:00–14:00" },
-  { id: "afternoon", label: "Afternoon 14:00–21:00" },
-  { id: "evening", label: "Evening 21:00–07:00" },
-];
+import { SHIFTS } from "../shifts";
 
 type Board = {
   ward_id: number;
@@ -26,9 +21,13 @@ type Board = {
     status: string;
     risk_level: string;
     outgoing_nurse?: string | null;
+    assigned_nurse_name?: string | null;
+    can_write?: boolean;
   }[];
   outgoing_nurses: { id: number; full_name: string; handover_count: number }[];
+  assigned_nurses?: { id: number; full_name: string }[];
   assigned_nurse: { id: number; full_name: string } | null;
+  incoming_nurses?: { id: number; full_name: string }[];
   incoming_nurse: { id: number; full_name: string } | null;
   next_shift_type: string;
   next_shift_date: string;
@@ -156,6 +155,7 @@ export default function WardBoard() {
               <th>Bed</th>
               <th>Patient</th>
               <th>Diagnosis</th>
+              <th>Assigned</th>
               <th>Outgoing nurse</th>
               <th>Risk</th>
               <th>Handover</th>
@@ -173,6 +173,7 @@ export default function WardBoard() {
                   </div>
                 </td>
                 <td>{p.diagnosis}</td>
+                <td>{p.assigned_nurse_name || "Any rostered nurse"}</td>
                 <td>{p.outgoing_nurse || "—"}</td>
                 <td>
                   <span className={`badge ${p.risk_level}`}>{p.risk_level}</span>
@@ -183,11 +184,11 @@ export default function WardBoard() {
                 <td>
                   {p.handover_id ? (
                     <Link className="btn" to={`/handover/${p.handover_id}`}>
-                      {board.can_write && (p.status === "draft" || p.status === "returned" || p.status === "missing")
+                      {p.can_write && (p.status === "draft" || p.status === "returned" || p.status === "missing")
                         ? "Continue"
                         : "View"}
                     </Link>
-                  ) : board.can_write ? (
+                  ) : p.can_write ? (
                     <button className="btn primary" onClick={() => openHandover(p.admission_id)}>
                       Start SBAR
                     </button>
@@ -212,10 +213,12 @@ export default function WardBoard() {
           ) : (
             <>
               <p className="muted">
-                The officer assigned to this shift writes every SBAR. The officer assigned to the next shift (
+                Rostered nurses write the patients allocated to them. Unallocated patients can be written by any nurse on this ward shift. The next shift (
                 {board.next_shift_type} {board.next_shift_date}
-                {board.incoming_nurse ? ` — ${board.incoming_nurse.full_name}` : ", not yet rostered"}) receives it and
-                cannot change the previous note.
+                {(board.incoming_nurses && board.incoming_nurses.length > 0)
+                  ? ` — ${board.incoming_nurses.map((n) => n.full_name).join(", ")}`
+                  : ", not yet rostered"})
+                receives it and cannot change the previous note.
               </p>
               <p>
                 Incomplete: {board.blockers.incomplete.length} · Critical unreviewed: {board.blockers.critical_unreviewed.length}

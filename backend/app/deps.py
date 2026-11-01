@@ -8,7 +8,17 @@ from sqlalchemy.orm import Session, joinedload
 from app.clock import now as ist_now
 from app.config import settings
 from app.database import get_db
-from app.models import User, Role, UserWardAssignment, ShiftType, AuditLog, ShiftAssignment, Handover, HandoverStatus
+from app.models import (
+    User,
+    Role,
+    UserWardAssignment,
+    ShiftType,
+    AuditLog,
+    ShiftAssignment,
+    PatientShiftAssignment,
+    Handover,
+    HandoverStatus,
+)
 from app.security import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -16,6 +26,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 SUPERINTENDENTS = {Role.medical_superintendent, Role.nursing_superintendent}
 REVIEWERS = SUPERINTENDENTS | {Role.hod, Role.nursing_supervisor}
 ADMINS = SUPERINTENDENTS
+HOSPITAL_WIDE = SUPERINTENDENTS | {Role.nursing_supervisor}
+PATIENT_ASSIGNERS = {Role.hod, Role.nursing_supervisor, Role.medical_superintendent}
+ASSIGNABLE_ROLES = {Role.nursing_officer, Role.hod, Role.nursing_supervisor, Role.medical_superintendent}
 
 
 def current_shift(now: datetime | None = None) -> tuple[ShiftType, date]:
@@ -68,7 +81,7 @@ def require_roles(*roles: Role):
 
 
 def user_ward_ids(db: Session, user: User) -> list[int]:
-    if user.role in SUPERINTENDENTS:
+    if user.role in HOSPITAL_WIDE:
         from app.models import Ward
 
         return [w.id for w in db.query(Ward).filter(Ward.is_active.is_(True)).all()]
@@ -121,7 +134,7 @@ def write_audit(
     db.commit()
 
 
-def get_shift_assignment(db: Session, ward_id: int, shift_type: ShiftType, shift_date: date) -> ShiftAssignment | None:
+def list_shift_assignments(db: Session, ward_id: int, shift_type: ShiftType, shift_date: date) -> list[ShiftAssignment]:
     return (
         db.query(ShiftAssignment)
         .options(joinedload(ShiftAssignment.nurse), joinedload(ShiftAssignment.assigned_by))
@@ -130,28 +143,67 @@ def get_shift_assignment(db: Session, ward_id: int, shift_type: ShiftType, shift
             ShiftAssignment.shift_type == shift_type,
             ShiftAssignment.shift_date == shift_date,
         )
+        .order_by(ShiftAssignment.id)
+        .all()
+    )
+
+
+def get_shift_assignment(db: Session, ward_id: int, shift_type: ShiftType, shift_date: date) -> ShiftAssignment | None:
+    rows = list_shift_assignments(db, ward_id, shift_type, shift_date)
+    return rows[0] if rows else None
+
+
+def get_patient_assignment(
+    db: Session, admission_id: int, shift_type: ShiftType, shift_date: date
+) -> PatientShiftAssignment | None:
+    return (
+        db.query(PatientShiftAssignment)
+        .options(joinedload(PatientShiftAssignment.nurse))
+        .filter(
+            PatientShiftAssignment.admission_id == admission_id,
+            PatientShiftAssignment.shift_type == shift_type,
+            PatientShiftAssignment.shift_date == shift_date,
+        )
         .first()
     )
 
 
 def is_rostered_for_shift(db: Session, user: User, ward_id: int, shift_type: ShiftType, shift_date: date) -> bool:
-    row = get_shift_assignment(db, ward_id, shift_type, shift_date)
-    return bool(row and row.nurse_id == user.id)
+    return any(row.nurse_id == user.id for row in list_shift_assignments(db, ward_id, shift_type, shift_date))
+
+
+def nurse_can_write_patient(
+    db: Session, user: User, ward_id: int, shift_type: ShiftType, shift_date: date, admission_id: int
+) -> bool:
+    if user.role != Role.nursing_officer:
+        return False
+    if not is_rostered_for_shift(db, user, ward_id, shift_type, shift_date):
+        return False
+    assigned = get_patient_assignment(db, admission_id, shift_type, shift_date)
+    if assigned and assigned.nurse_id != user.id:
+        return False
+    return True
 
 
 def handover_edit_block_reason(db: Session, user: User, h: Handover) -> str | None:
-    """Return a reason the SBAR cannot be edited, or None if the author may update it."""
+    """Return a reason the SBAR cannot be edited, or None if this nurse may update it."""
     if h.status == HandoverStatus.accepted:
         return "Accepted handovers are read-only"
-    if user.role == Role.nursing_officer:
-        if h.author_id != user.id:
-            return "You cannot change another nurse's SBAR"
-        if h.status in (HandoverStatus.submitted, HandoverStatus.under_review):
-            return "Submitted SBAR is locked until a supervisor returns it"
-        if not is_rostered_for_shift(db, user, h.admission.ward_id, h.shift_type, h.shift_date):
-            return "You are not assigned to this shift"
+    if user.role != Role.nursing_officer:
+        return "Only the nurse who wrote this SBAR can change it"
+    if h.status in (HandoverStatus.submitted, HandoverStatus.under_review):
+        return "Submitted SBAR is locked until a supervisor returns it"
+    ward_id = h.admission.ward_id
+    if not is_rostered_for_shift(db, user, ward_id, h.shift_type, h.shift_date):
+        return "You are not assigned to this shift"
+    assigned = get_patient_assignment(db, h.admission_id, h.shift_type, h.shift_date)
+    if assigned and assigned.nurse_id != user.id:
+        return "This patient is assigned to another nurse for this shift"
+    if assigned and assigned.nurse_id == user.id:
         return None
-    return "Only the nurse who wrote this SBAR can change it"
+    if h.author_id != user.id:
+        return "You cannot change another nurse's SBAR"
+    return None
 
 
 def assert_can_edit_handover(db: Session, user: User, h: Handover) -> None:
@@ -160,9 +212,14 @@ def assert_can_edit_handover(db: Session, user: User, h: Handover) -> None:
         raise HTTPException(status_code=403, detail=reason)
 
 
-def assert_rostered_writer(db: Session, user: User, ward_id: int, shift_type: ShiftType, shift_date: date) -> None:
-    row = get_shift_assignment(db, ward_id, shift_type, shift_date)
-    if not row:
+def assert_rostered_writer(
+    db: Session, user: User, ward_id: int, shift_type: ShiftType, shift_date: date, admission_id: int
+) -> None:
+    rows = list_shift_assignments(db, ward_id, shift_type, shift_date)
+    if not rows:
         raise HTTPException(403, "A supervisor must assign a nursing officer to this shift first")
-    if user.role != Role.nursing_officer or row.nurse_id != user.id:
-        raise HTTPException(403, "Only the nurse assigned to this shift can write SBARs")
+    if not nurse_can_write_patient(db, user, ward_id, shift_type, shift_date, admission_id):
+        assigned = get_patient_assignment(db, admission_id, shift_type, shift_date)
+        if assigned and assigned.nurse_id != user.id:
+            raise HTTPException(403, "This patient is assigned to another nurse for this shift")
+        raise HTTPException(403, "Only a nurse rostered on this shift can write SBARs")

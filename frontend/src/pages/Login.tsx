@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { errorDetail } from "../api";
 import AuthBrand from "./AuthBrand";
+import PasswordField from "../PasswordField";
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -45,7 +46,7 @@ export default function Login() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+            <PasswordField value={password} onChange={setPassword} autoComplete="current-password" required />
           </div>
           {error && <p className="error">{error}</p>}
           <button className="btn primary" disabled={busy} style={{ width: "100%" }}>

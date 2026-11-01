@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Patient, Admission, AdmissionStatus, User, Role
 from app.schemas import PatientIn, PatientOut, AdmissionIn, AdmissionOut, TransferIn
 from app.deps import get_current_user, assert_ward_access, write_audit, ADMINS, REVIEWERS, user_ward_ids, ward_filter
+from app.events import record_event
 
 router = APIRouter(tags=["clinical"])
 
@@ -68,6 +69,17 @@ def create_admission(
         raise HTTPException(404, "Patient not found")
     a = Admission(**body.model_dump())
     db.add(a)
+    db.flush()
+    patient = db.get(Patient, a.patient_id)
+    record_event(
+        db,
+        kind="admission",
+        title="New admission",
+        body=f"{patient.name if patient else 'Patient'} admitted to bed {a.bed_number}",
+        patient_id=a.patient_id,
+        ward_id=a.ward_id,
+        entity_key=f"admission:{a.id}",
+    )
     db.commit()
     db.refresh(a)
     write_audit(db, user, "create", "admission", a.id, request=request)

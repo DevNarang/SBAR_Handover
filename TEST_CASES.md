@@ -1,6 +1,6 @@
 # Test cases — SBAR Nursing Handover
 
-Hospital-wide shifts are **Morning 07:00–14:00**, **Afternoon 14:00–21:00**, **Evening 21:00–07:00**.  
+Hospital-wide shifts are **Morning 08:00–13:59**, **Afternoon 14:00–19:59**, **Evening 20:00–07:59**.  
 Handover is **nurse-to-nurse**: the outgoing nurse completes SBAR; the incoming nurse receives the ward for that shift.
 
 Use these cases for QA. Expected results are the pass criteria.
@@ -27,9 +27,9 @@ Use these cases for QA. Expected results are the pass criteria.
 
 | ID | Flow | Steps | Expected |
 |----|------|-------|----------|
-| SH-01 | Current shift | Open app during 07:00–14:00 | Shift chip = Morning |
-| SH-02 | Afternoon window | 14:00–21:00 | Shift = Afternoon |
-| SH-03 | Evening window | 21:00–07:00 | Shift = Evening; date is the date the evening shift **started** |
+| SH-01 | Current shift | Open app during 08:00–13:59 | Shift chip = Morning |
+| SH-02 | Afternoon window | 14:00–19:59 | Shift = Afternoon |
+| SH-03 | Evening window | 20:00–07:59 | Shift = Evening; date is the date the evening shift **started** |
 | SH-04 | Shift tabs | Ward board → Morning / Afternoon / Evening | Board filters SBAR notes for that shift + date |
 | SH-05 | Isolated notes | Complete a Morning SBAR; open Afternoon | Afternoon list is empty/missing until started |
 | SH-06 | Evening dark mode | Theme Auto on Evening shift | Dark theme on |

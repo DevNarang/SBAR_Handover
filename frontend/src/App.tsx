@@ -18,6 +18,8 @@ import Reports from "./pages/Reports";
 import Audit from "./pages/Audit";
 import Admin from "./pages/Admin";
 import Roster from "./pages/Roster";
+import Notifications from "./pages/Notifications";
+import Account from "./pages/Account";
 import { ToastHost } from "./notify";
 import type { ReactNode } from "react";
 
@@ -58,6 +60,8 @@ export default function App() {
             <Route path="admin" element={<Admin />} />
             <Route path="approvals" element={<Approvals />} />
             <Route path="roster" element={<Roster />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="account" element={<Account />} />
           </Route>
         </Routes>
         <ToastHost />

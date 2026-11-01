@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.clock import now as ist_now
 from app.database import get_db
 from app.models import AccountStatus, Role, User, LoginAttempt, Ward
+from pydantic import BaseModel
+
 from app.schemas import LoginRequest, SignupRequest, Token, UserOut
 from app.security import verify_password, create_access_token, hash_password
 from app.deps import get_current_user, user_ward_ids, write_audit
@@ -159,3 +161,25 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     out = UserOut.model_validate(user)
     out.ward_ids = user_ward_ids(db, user)
     return out
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    body: PasswordChange,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(400, "Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    write_audit(db, user, "change_password", "user", user.id, request=request)
+    return {"ok": True}

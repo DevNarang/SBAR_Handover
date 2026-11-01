@@ -2,7 +2,7 @@
 
 Nurse-to-nurse shift handover for **AIIMS Bibinagar, Hyderabad**. Outgoing nursing officers complete structured **SBAR** notes (Situation, Background, Assessment, Recommendation); the incoming officer on the next shift receives the ward.
 
-Hospital-wide shifts are morning (07:00–14:00), afternoon (14:00–21:00), and evening (21:00–07:00). Supervisors assign who is on each ward shift. The next nurse gets the previous SBAR as an editable draft and cannot change the outgoing note. Staff nurses can raise escalations; only supervisors and above can resolve them.
+Hospital-wide shifts are morning (08:00–13:59), afternoon (14:00–19:59), and evening (20:00–07:59). Several nurses can cover one ward shift, and patients can be allocated to one of them. The next nurse gets the previous SBAR as an editable draft and cannot change the outgoing note. Staff nurses can raise escalations; only supervisors and above can resolve them.
 
 ## Stack
 

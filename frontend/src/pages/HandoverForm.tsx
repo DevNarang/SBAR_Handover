@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, downloadFile } from "../api";
 import { nowIstIso } from "../clock";
 import { notify, notifyError } from "../notify";
 import { useAuth } from "../auth";
@@ -40,6 +40,12 @@ export default function HandoverForm() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("S");
   const [msg, setMsg] = useState("");
   const [voiceField, setVoiceField] = useState("current_situation");
+  const [aiDraftFields, setAiDraftFields] = useState<{
+    current_situation: string;
+    significant_findings: string;
+    immediate_treatment: string;
+    nursing_care: string;
+  } | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const hRef = useRef<Handover | null>(null);
   const saveSeq = useRef(0);
@@ -118,16 +124,22 @@ export default function HandoverForm() {
     const r = await api.post<{ draft: string }>(`/ai/summary`, { handover_id: h!.id, payload: {} });
     try {
       const parsed = JSON.parse(r.draft.replace(/```json|```/g, "").trim());
-      await save({
-        current_situation: parsed.current_situation ?? h!.current_situation,
-        significant_findings: parsed.significant_findings ?? h!.significant_findings,
-        immediate_treatment: parsed.immediate_treatment ?? h!.immediate_treatment,
-        nursing_care: parsed.nursing_care ?? h!.nursing_care,
+      setAiDraftFields({
+        current_situation: String(parsed.current_situation ?? ""),
+        significant_findings: String(parsed.significant_findings ?? ""),
+        immediate_treatment: String(parsed.immediate_treatment ?? ""),
+        nursing_care: String(parsed.nursing_care ?? ""),
       });
-      setMsg("AI draft inserted. Review before submit — never auto-saved as final.");
-      notify("AI draft inserted", "Review the fields before you submit. This is not the final SBAR.");
+      setMsg("Draft is in the panel. Insert it only if you choose Use this.");
+      notify("AI draft ready", "Read and edit it, then use it or discard it.");
     } catch {
-      setMsg(r.draft);
+      setAiDraftFields({
+        current_situation: r.draft,
+        significant_findings: "",
+        immediate_treatment: "",
+        nursing_care: "",
+      });
+      setMsg("The model did not return structured fields. Edit the draft before using it.");
     }
   }
 
@@ -180,6 +192,9 @@ export default function HandoverForm() {
           <span className={`badge ${h.risk_level}`}>{String(h.risk_level)}</span>
           <span className={`badge ${h.status}`}>{String(h.status).replace("_", " ")}</span>
           <span className="chip">Suggested: {h.suggested_risk}</span>
+          <button className="btn" onClick={() => downloadFile(`/handovers/${h.id}/report.pdf`, `sbar-${h.id}.pdf`)}>
+            Download PDF
+          </button>
           <button className="btn" onClick={() => nav("/ward")}>
             Back
           </button>
@@ -198,11 +213,13 @@ export default function HandoverForm() {
         </p>
       )}
 
-      {!readOnly && (
+      {(!readOnly || reviewer) && (
       <div className="inline" style={{ marginBottom: 12 }}>
         <button className="btn primary" onClick={aiDraft}>
           AI draft
         </button>
+        {!readOnly && (
+        <>
         <select className="btn" value={voiceField} onChange={(e) => setVoiceField(e.target.value)}>
           <option value="current_situation">Voice → Situation</option>
           <option value="immediate_concern">Voice → Concern</option>
@@ -212,7 +229,46 @@ export default function HandoverForm() {
         <button className="btn" onClick={recordVoice}>
           Voice
         </button>
+        </>
+        )}
       </div>
+      )}
+      {aiDraftFields && (
+        <div className="card stack" style={{ marginBottom: 12 }}>
+          <h3>AI draft</h3>
+          <p className="muted">Edit this draft. It stays here until you insert it or discard it. Generate again replaces this panel only.</p>
+          {([
+            ["current_situation", "Situation"],
+            ["significant_findings", "Findings"],
+            ["immediate_treatment", "Treatment"],
+            ["nursing_care", "Nursing care"],
+          ] as const).map(([key, label]) => (
+            <div className="field" key={key}>
+              <label>{label}</label>
+              <textarea
+                value={aiDraftFields[key]}
+                onChange={(e) => setAiDraftFields({ ...aiDraftFields, [key]: e.target.value })}
+              />
+            </div>
+          ))}
+          <div className="inline">
+            {!readOnly && (
+              <button
+                className="btn primary"
+                onClick={() => {
+                  void save(aiDraftFields);
+                  setAiDraftFields(null);
+                  notify("AI draft inserted", "The SBAR fields now include this draft.");
+                }}
+              >
+                Use this
+              </button>
+            )}
+            <button className="btn" onClick={() => setAiDraftFields(null)}>
+              Discard
+            </button>
+          </div>
+        </div>
       )}
       {msg && (
         <p className={msg.toLowerCase().includes("error") || msg.includes("missing") ? "error" : msg.toLowerCase().includes("submitted") ? "notice ok" : "muted"}>

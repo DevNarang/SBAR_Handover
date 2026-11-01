@@ -18,7 +18,7 @@ type Admission = {
 
 export default function Patients() {
   const { user } = useAuth();
-  const pickDeptFirst = user?.role === "nursing_superintendent" || user?.role === "medical_superintendent";
+  const pickDeptFirst = ["nursing_superintendent", "medical_superintendent", "nursing_supervisor"].includes(user?.role || "");
   const [patients, setPatients] = useState<Patient[]>([]);
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [wards, setWards] = useState<Ward[]>([]);

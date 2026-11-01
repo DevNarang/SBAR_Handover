@@ -39,11 +39,13 @@ from app.deps import (
     ward_filter,
     REVIEWERS,
     SUPERINTENDENTS,
-    get_shift_assignment,
-    is_rostered_for_shift,
+    list_shift_assignments,
+    nurse_can_write_patient,
+    get_patient_assignment,
     assert_can_edit_handover,
 )
 from app.ai import summarize_sbar, transcribe_voice
+from app.events import record_event
 
 router = APIRouter(tags=["ops"])
 
@@ -57,9 +59,9 @@ def meta_shift():
         "timezone": TIMEZONE_NAME,
         "hospital_name": settings.hospital_name,
         "windows": {
-            "morning": f"{settings.morning_start:02d}:00–{settings.morning_end:02d}:00",
-            "afternoon": f"{settings.afternoon_start:02d}:00–{settings.afternoon_end:02d}:00",
-            "evening": f"{settings.evening_start:02d}:00–{settings.evening_end:02d}:00 (+1)",
+            "morning": f"{settings.morning_start:02d}:00–{settings.morning_end - 1:02d}:59",
+            "afternoon": f"{settings.afternoon_start:02d}:00–{settings.afternoon_end - 1:02d}:59",
+            "evening": f"{settings.evening_start:02d}:00–{settings.evening_end - 1:02d}:59",
         },
         "shifts": ["morning", "afternoon", "evening"],
         "previous_shift": previous_shift(st, sd)[0].value,
@@ -116,6 +118,7 @@ def ward_board(
     patients = []
     for a in admissions:
         h = by_adm.get(a.id)
+        allotted = get_patient_assignment(db, a.id, shift_type, shift_date)
         patients.append(
             {
                 "admission_id": a.id,
@@ -130,6 +133,9 @@ def ward_board(
                 "risk_level": h.risk_level.value if h else "stable",
                 "critical_flag": h.critical_flag if h else False,
                 "outgoing_nurse": h.author.full_name if h and h.author else None,
+                "assigned_nurse_id": allotted.nurse_id if allotted else None,
+                "assigned_nurse_name": allotted.nurse.full_name if allotted and allotted.nurse else None,
+                "can_write": nurse_can_write_patient(db, user, ward_id, shift_type, shift_date, a.id),
             }
         )
     incomplete = [p for p in patients if p["status"] in ("missing", "draft", "returned")]
@@ -138,28 +144,25 @@ def ward_board(
         for p in patients
         if p["risk_level"] == "critical" and p["status"] not in ("accepted",)
     ]
-    assignment = get_shift_assignment(db, ward_id, shift_type, shift_date)
+    roster = list_shift_assignments(db, ward_id, shift_type, shift_date)
     nxt_st, nxt_sd = next_shift(shift_type, shift_date)
-    incoming = get_shift_assignment(db, ward_id, nxt_st, nxt_sd)
-    can_write = is_rostered_for_shift(db, user, ward_id, shift_type, shift_date)
-    can_receive = False
-    if signoff is None and user.id != (assignment.nurse_id if assignment else None):
-        if user.role in REVIEWERS:
-            can_receive = True
-        elif user.role == Role.nursing_officer and incoming and incoming.nurse_id == user.id:
-            can_receive = True
-    def _nurse(row):
-        if not row or not row.nurse:
-            return None
-        return {"id": row.nurse_id, "full_name": row.nurse.full_name}
+    incoming_rows = list_shift_assignments(db, ward_id, nxt_st, nxt_sd)
+    can_write = any(p["can_write"] for p in patients)
+    incoming_ids = {row.nurse_id for row in incoming_rows}
+    can_receive = signoff is None and (user.role in REVIEWERS or user.id in incoming_ids)
+
+    def _nurses(rows):
+        return [{"id": row.nurse_id, "full_name": row.nurse.full_name} for row in rows if row.nurse]
     return {
         "ward_id": ward_id,
         "shift_type": shift_type.value,
         "shift_date": str(shift_date),
         "patients": patients,
         "outgoing_nurses": list(outgoing.values()),
-        "assigned_nurse": _nurse(assignment),
-        "incoming_nurse": _nurse(incoming),
+        "assigned_nurses": _nurses(roster),
+        "assigned_nurse": (_nurses(roster) or [None])[0],
+        "incoming_nurses": _nurses(incoming_rows),
+        "incoming_nurse": (_nurses(incoming_rows) or [None])[0],
         "next_shift_type": nxt_st.value,
         "next_shift_date": str(nxt_sd),
         "can_write": can_write,
@@ -200,10 +203,9 @@ def signoff(
     if outgoing.id == user.id:
         raise HTTPException(400, "Incoming nurse must be different from the outgoing nurse")
     nxt_st, nxt_sd = next_shift(body.shift_type, body.shift_date)
-    incoming_slot = get_shift_assignment(db, body.ward_id, nxt_st, nxt_sd)
-    if user.role == Role.nursing_officer:
-        if not incoming_slot or incoming_slot.nurse_id != user.id:
-            raise HTTPException(403, "Only the nurse assigned to the next shift can receive this handover")
+    incoming_ids = {row.nurse_id for row in list_shift_assignments(db, body.ward_id, nxt_st, nxt_sd)}
+    if user.role == Role.nursing_officer and user.id not in incoming_ids:
+        raise HTTPException(403, "Only a nurse assigned to the next shift can receive this handover")
     board = ward_board(body.ward_id, body.shift_type, body.shift_date, db, user)
     if not board["blockers"]["can_signoff"]:
         raise HTTPException(400, detail={"message": "Handover cannot be received yet", "blockers": board["blockers"]})
@@ -283,6 +285,16 @@ def create_escalation(
         status=EscalationStatus.open,
     )
     db.add(e)
+    db.flush()
+    record_event(
+        db,
+        kind="escalation",
+        title="Escalation raised",
+        body=body.description,
+        patient_id=h.admission.patient_id if h.admission else None,
+        ward_id=h.admission.ward_id if h.admission else None,
+        entity_key=f"escalation:{e.id}",
+    )
     db.commit()
     write_audit(db, user, "create", "escalation", e.id, request=request)
     return {"id": e.id}

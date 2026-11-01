@@ -314,6 +314,8 @@ tr:last-child td { border-bottom: 0; }
   background: var(--bg); padding: 10px 12px;
 }
 .field textarea { min-height: 96px; resize: vertical; }
+.password-field { display: flex; gap: 8px; align-items: center; }
+.password-field input { flex: 1; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
 .tab {
