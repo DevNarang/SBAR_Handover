@@ -41,17 +41,49 @@ export default function HandoverForm() {
   const [msg, setMsg] = useState("");
   const [voiceField, setVoiceField] = useState("current_situation");
   const recRef = useRef<MediaRecorder | null>(null);
+  const hRef = useRef<Handover | null>(null);
+  const saveSeq = useRef(0);
+  hRef.current = h;
 
   useEffect(() => {
     api.get<Handover>(`/handovers/${id}`).then(setH).catch((e) => setMsg(String(e)));
   }, [id]);
 
+  function patchLocal(patch: Record<string, unknown>) {
+    setH((prev) => {
+      if (!prev || prev.can_edit === false) return prev;
+      const next = { ...prev, ...patch } as Handover;
+      hRef.current = next;
+      return next;
+    });
+  }
+
   async function save(patch: Record<string, unknown>) {
-    if (!h || h.can_edit === false) return;
-    const next = { ...h, ...patch };
-    setH(next as Handover);
-    const saved = await api.patch<Handover>(`/handovers/${h.id}`, patch);
-    setH(saved);
+    const current = hRef.current;
+    if (!current || current.can_edit === false) return;
+    const next = { ...current, ...patch } as Handover;
+    hRef.current = next;
+    setH(next);
+    const seq = ++saveSeq.current;
+    let saved: Handover;
+    try {
+      saved = await api.patch<Handover>(`/handovers/${current.id}`, patch);
+    } catch (e) {
+      if (seq === saveSeq.current) notifyError("Could not save", String(e));
+      return;
+    }
+    if (seq !== saveSeq.current) return;
+    setH((prev) => {
+      if (!prev) return saved;
+      const merged = { ...saved } as Handover;
+      for (const key of Object.keys(prev)) {
+        if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) {
+          (merged as Record<string, unknown>)[key] = prev[key];
+        }
+      }
+      hRef.current = merged;
+      return merged;
+    });
   }
 
   function setField(key: string, value: unknown) {
@@ -238,15 +270,33 @@ export default function HandoverForm() {
 
       {tab === "B" && (
         <div className="card stack">
-          <ListEditor label="Medical history" rows={(h.medical_history as { item: string; notes: string }[]) || []} onChange={(rows) => save({ medical_history: rows })} />
-          <ListEditor label="Surgical history" rows={(h.surgical_history as { item: string; notes: string }[]) || []} onChange={(rows) => save({ surgical_history: rows })} />
-          <MedEditor rows={(h.medications as Record<string, string>[]) || []} onChange={(rows) => save({ medications: rows })} />
+          <ListEditor
+            label="Medical history"
+            rows={(h.medical_history as { item: string; notes: string }[]) || []}
+            onChange={(rows) => patchLocal({ medical_history: rows })}
+            onCommit={(rows) => void save({ medical_history: rows })}
+          />
+          <ListEditor
+            label="Surgical history"
+            rows={(h.surgical_history as { item: string; notes: string }[]) || []}
+            onChange={(rows) => patchLocal({ surgical_history: rows })}
+            onCommit={(rows) => void save({ surgical_history: rows })}
+          />
+          <MedEditor
+            rows={(h.medications as Record<string, string>[]) || []}
+            onChange={(rows) => patchLocal({ medications: rows })}
+            onCommit={(rows) => void save({ medications: rows })}
+          />
           <label className="inline">
             <input type="checkbox" checked={Boolean(h.nkda)} onChange={(e) => save({ nkda: e.target.checked, allergies: e.target.checked ? [] : h.allergies })} />
             NKDA — no known drug allergies
           </label>
           {!h.nkda && (
-            <AllergyEditor rows={(h.allergies as Record<string, string>[]) || []} onChange={(rows) => save({ allergies: rows })} />
+            <AllergyEditor
+              rows={(h.allergies as Record<string, string>[]) || []}
+              onChange={(rows) => patchLocal({ allergies: rows })}
+              onCommit={(rows) => void save({ allergies: rows })}
+            />
           )}
         </div>
       )}
@@ -392,56 +442,117 @@ function ListEditor({
   label,
   rows,
   onChange,
+  onCommit,
 }: {
   label: string;
   rows: { item: string; notes: string }[];
   onChange: (rows: { item: string; notes: string }[]) => void;
+  onCommit: (rows: { item: string; notes: string }[]) => void;
 }) {
+  function withCell(i: number, key: "item" | "notes", value: string) {
+    return rows.map((x, j) => (j === i ? { ...x, [key]: value } : x));
+  }
   return (
     <div>
       <strong>{label}</strong>
       {rows.map((r, i) => (
         <div className="row" key={i} style={{ marginTop: 8 }}>
-          <input value={r.item} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))} placeholder="Item" />
-          <input value={r.notes} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, notes: e.target.value } : x)))} placeholder="Notes" />
+          <input
+            value={r.item}
+            placeholder="Item"
+            onChange={(e) => onChange(withCell(i, "item", e.target.value))}
+            onBlur={(e) => onCommit(withCell(i, "item", e.target.value))}
+          />
+          <input
+            value={r.notes}
+            placeholder="Notes"
+            onChange={(e) => onChange(withCell(i, "notes", e.target.value))}
+            onBlur={(e) => onCommit(withCell(i, "notes", e.target.value))}
+          />
         </div>
       ))}
-      <button className="btn" style={{ marginTop: 8 }} onClick={() => onChange([...rows, { item: "", notes: "" }])}>
+      <button className="btn" style={{ marginTop: 8 }} onClick={() => onCommit([...rows, { item: "", notes: "" }])}>
         Add
       </button>
     </div>
   );
 }
 
-function MedEditor({ rows, onChange }: { rows: Record<string, string>[]; onChange: (r: Record<string, string>[]) => void }) {
+function MedEditor({
+  rows,
+  onChange,
+  onCommit,
+}: {
+  rows: Record<string, string>[];
+  onChange: (r: Record<string, string>[]) => void;
+  onCommit: (r: Record<string, string>[]) => void;
+}) {
+  function withCell(i: number, key: string, value: string) {
+    return rows.map((x, j) => (j === i ? { ...x, [key]: value } : x));
+  }
   return (
     <div>
       <strong>Current medications</strong>
       {rows.map((r, i) => (
         <div className="row" key={i} style={{ marginTop: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
           {["name", "dose", "route", "frequency"].map((k) => (
-            <input key={k} placeholder={k} value={r[k] || ""} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))} />
+            <input
+              key={k}
+              placeholder={k}
+              value={r[k] || ""}
+              onChange={(e) => onChange(withCell(i, k, e.target.value))}
+              onBlur={(e) => onCommit(withCell(i, k, e.target.value))}
+            />
           ))}
         </div>
       ))}
-      <button className="btn" style={{ marginTop: 8 }} onClick={() => onChange([...rows, { name: "", dose: "", route: "", frequency: "", notes: "" }])}>
+      <button
+        className="btn"
+        style={{ marginTop: 8 }}
+        onClick={() => onCommit([...rows, { name: "", dose: "", route: "", frequency: "", notes: "" }])}
+      >
         Add medication
       </button>
     </div>
   );
 }
 
-function AllergyEditor({ rows, onChange }: { rows: Record<string, string>[]; onChange: (r: Record<string, string>[]) => void }) {
+function AllergyEditor({
+  rows,
+  onChange,
+  onCommit,
+}: {
+  rows: Record<string, string>[];
+  onChange: (r: Record<string, string>[]) => void;
+  onCommit: (r: Record<string, string>[]) => void;
+}) {
+  function withCell(i: number, key: string, value: string) {
+    return rows.map((x, j) => (j === i ? { ...x, [key]: value } : x));
+  }
   return (
     <div>
       <strong>Allergies</strong>
       {rows.map((r, i) => (
         <div className="row" key={i} style={{ marginTop: 8 }}>
-          <input placeholder="Allergen" value={r.allergen || ""} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, allergen: e.target.value } : x)))} />
-          <input placeholder="Reaction" value={r.reaction || ""} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, reaction: e.target.value } : x)))} />
+          <input
+            placeholder="Allergen"
+            value={r.allergen || ""}
+            onChange={(e) => onChange(withCell(i, "allergen", e.target.value))}
+            onBlur={(e) => onCommit(withCell(i, "allergen", e.target.value))}
+          />
+          <input
+            placeholder="Reaction"
+            value={r.reaction || ""}
+            onChange={(e) => onChange(withCell(i, "reaction", e.target.value))}
+            onBlur={(e) => onCommit(withCell(i, "reaction", e.target.value))}
+          />
         </div>
       ))}
-      <button className="btn" style={{ marginTop: 8 }} onClick={() => onChange([...rows, { allergen: "", reaction: "", severity: "moderate" }])}>
+      <button
+        className="btn"
+        style={{ marginTop: 8 }}
+        onClick={() => onCommit([...rows, { allergen: "", reaction: "", severity: "moderate" }])}
+      >
         Add allergy
       </button>
     </div>
