@@ -25,6 +25,21 @@ export function formatIst(value: string | Date | null | undefined): string {
   return d.toLocaleString("en-IN", IST_CLOCK);
 }
 
+export function formatLocalNow(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TZ,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(now);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${g("weekday")}, ${g("month")} ${g("day")} ${g("year")} ${g("hour")}:${g("minute")} ${g("dayPeriod")} Local Time`;
+}
+
 export function nowIstIso(): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: IST_TZ,

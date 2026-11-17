@@ -105,6 +105,7 @@ export type User = {
   rejection_reason?: string | null;
   is_active: boolean;
   ward_ids: number[];
+  ward_names?: string[];
 };
 
 export type Ward = { id: number; name: string; department: string | null; is_active: boolean };

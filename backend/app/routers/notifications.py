@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.clock import now as ist_now
@@ -66,6 +67,16 @@ def _rows(db: Session, user: User, patient_id: int | None, ward_id: int | None) 
             }
         )
     return out
+
+
+@router.get("/notifications/unread-count")
+def unread_count(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    ensure_task_due(db)
+    total = db.query(func.count(Notification.id)).scalar() or 0
+    read = (
+        db.query(func.count(NotificationRead.id)).filter(NotificationRead.user_id == user.id).scalar() or 0
+    )
+    return {"count": max(0, int(total) - int(read))}
 
 
 @router.get("/notifications")

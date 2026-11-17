@@ -6,6 +6,7 @@ type Auth = {
   loading: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => void;
+  reloadUser: () => Promise<void>;
 };
 
 const Ctx = createContext<Auth>(null as unknown as Auth);
@@ -43,6 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearToken();
           setUser(null);
           window.location.href = "/login";
+        },
+        reloadUser: async () => {
+          setUser(await api.get<User>("/auth/me"));
         },
       }}
     >

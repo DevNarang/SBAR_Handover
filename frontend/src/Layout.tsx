@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth";
-import { ROLE_LABEL } from "./api";
+import { api, ROLE_LABEL } from "./api";
 
 type NavItem = { to: string; label: string; roles: string[] | null };
 
@@ -24,7 +24,7 @@ const TAIL_LINKS: NavItem[] = [
   { to: "/approvals", label: "Approvals", roles: ["hod", "nursing_superintendent"] },
   { to: "/audit", label: "Audit", roles: ["hod", "nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
   { to: "/admin", label: "Wards", roles: ["hod"] },
-  { to: "/account", label: "Password", roles: null },
+  { to: "/account", label: "Profile", roles: null },
   { to: "/admin", label: "Admin", roles: ["nursing_superintendent", "medical_superintendent", "nursing_supervisor"] },
 ];
 
@@ -32,14 +32,18 @@ function visibleLinks(items: NavItem[], role: string) {
   return items.filter((l) => !l.roles || l.roles.includes(role));
 }
 
-function NavItems({ items }: { items: NavItem[] }) {
+function NavItems({ items, badges }: { items: NavItem[]; badges: Record<string, number> }) {
   return (
     <>
-      {items.map((l) => (
-        <NavLink key={l.to + l.label} to={l.to} end={l.to === "/"} className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
-          {l.label}
-        </NavLink>
-      ))}
+      {items.map((l) => {
+        const count = badges[l.to] || 0;
+        return (
+          <NavLink key={l.to + l.label} to={l.to} end={l.to === "/"} className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
+            <span>{l.label}</span>
+            {count > 0 && <span className="nav-count">{count > 99 ? "99+" : count}</span>}
+          </NavLink>
+        );
+      })}
     </>
   );
 }
@@ -51,6 +55,7 @@ export default function Layout() {
   const [theme, setTheme] = useState(stored === "dark" ? "dark" : "light");
   const workActive = WORK_LINKS.some((l) => location.pathname === l.to || location.pathname.startsWith(l.to + "/"));
   const [workOpen, setWorkOpen] = useState(workActive);
+  const [badges, setBadges] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (workActive) setWorkOpen(true);
@@ -60,6 +65,34 @@ export default function Layout() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("sbar_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBadges() {
+      try {
+        const notes = await api.get<{ count: number }>("/notifications/unread-count");
+        let approvals = 0;
+        if (user?.role === "nursing_superintendent" || user?.role === "hod") {
+          const pending = await api.get<{ count: number }>("/approvals/pending-count");
+          approvals = pending.count;
+        }
+        if (!cancelled) {
+          setBadges({ "/notifications": notes.count, "/approvals": approvals });
+        }
+      } catch {
+        /* keep last counts */
+      }
+    }
+    void loadBadges();
+    const onRefresh = () => void loadBadges();
+    window.addEventListener("sbar:badges", onRefresh);
+    const timer = window.setInterval(onRefresh, 30000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("sbar:badges", onRefresh);
+      window.clearInterval(timer);
+    };
+  }, [user?.role, location.pathname]);
 
   if (!user) return null;
   const top = visibleLinks(TOP_LINKS, user.role);
@@ -80,10 +113,11 @@ export default function Layout() {
               <p>All India Institute of Medical Sciences (AIIMS) - Bibinagar, Hyderabad</p>
             </div>
           </div>
-          <div className="user-card">
+          <NavLink to="/account" className="user-card">
             <strong>{user.full_name}</strong>
             {ROLE_LABEL[user.role]}
-          </div>
+            {user.department ? ` - ${user.department}` : ""}
+          </NavLink>
           <button type="button" className="btn sidebar-signout" onClick={logout}>
             Sign out
           </button>
@@ -118,7 +152,7 @@ export default function Layout() {
           </label>
         </div>
         <nav className="sidebar-nav" aria-label="Main">
-          <NavItems items={top} />
+          <NavItems items={top} badges={badges} />
           {work.length > 0 && (
             <div className="nav-group">
               <button
@@ -128,15 +162,20 @@ export default function Layout() {
                 aria-controls="sidebar-work-menu"
                 onClick={() => setWorkOpen((open) => !open)}
               >
-                Wards & work
-                <span className={"nav-chevron" + (workOpen ? " open" : "")} aria-hidden="true" />
+                <span>Wards & work</span>
+                <span className="nav-disclosure-end">
+                  {(badges["/notifications"] || 0) > 0 && !workOpen && (
+                    <span className="nav-count">{badges["/notifications"] > 99 ? "99+" : badges["/notifications"]}</span>
+                  )}
+                  <span className={"nav-chevron" + (workOpen ? " open" : "")} aria-hidden="true" />
+                </span>
               </button>
               <div id="sidebar-work-menu" className="nav-sub" hidden={!workOpen}>
-                <NavItems items={work} />
+                <NavItems items={work} badges={badges} />
               </div>
             </div>
           )}
-          <NavItems items={tail} />
+          <NavItems items={tail} badges={badges} />
         </nav>
       </aside>
       <main className="main">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, downloadFile, type Ward } from "../api";
 import { formatIst } from "../clock";
 import { notifyError } from "../notify";
+import { refreshBadges } from "../badges";
 
 type Note = {
   id: number;
@@ -114,6 +115,7 @@ export default function Notifications() {
                       onClick={async () => {
                         await api.post(`/notifications/${row.id}/read`);
                         await load();
+                        refreshBadges();
                       }}
                     >
                       Mark read

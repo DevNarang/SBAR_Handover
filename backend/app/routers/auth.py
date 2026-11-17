@@ -156,11 +156,49 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     return Token(access_token=token)
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def _user_profile(db, user: User) -> UserOut:
+    from app.models import Ward
+
     out = UserOut.model_validate(user)
     out.ward_ids = user_ward_ids(db, user)
+    if out.ward_ids:
+        wards = db.query(Ward).filter(Ward.id.in_(out.ward_ids)).order_by(Ward.name).all()
+        out.ward_names = [w.name for w in wards]
     return out
+
+
+@router.get("/me", response_model=UserOut)
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _user_profile(db, user)
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = None
+    mobile: str | None = None
+    designation: str | None = None
+
+
+@router.patch("/profile", response_model=UserOut)
+def update_profile(
+    body: ProfileUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    data = body.model_dump(exclude_unset=True)
+    if "full_name" in data:
+        name = (data["full_name"] or "").strip()
+        if len(name) < 2:
+            raise HTTPException(400, "Enter your full name")
+        user.full_name = name
+    if "mobile" in data:
+        user.mobile = (data["mobile"] or "").strip() or None
+    if "designation" in data:
+        user.designation = (data["designation"] or "").strip() or None
+    db.commit()
+    db.refresh(user)
+    write_audit(db, user, "update_profile", "user", user.id, request=request)
+    return _user_profile(db, user)
 
 
 class PasswordChange(BaseModel):

@@ -40,6 +40,7 @@ class UserOut(BaseModel):
     requested_ward_id: int | None = None
     is_active: bool
     ward_ids: list[int] = []
+    ward_names: list[str] = []
 
     class Config:
         from_attributes = True

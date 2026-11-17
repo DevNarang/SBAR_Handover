@@ -3,6 +3,7 @@ import { api, type ApprovalItem } from "../api";
 import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
+import { refreshBadges } from "../badges";
 
 export default function Approvals() {
   const { user } = useAuth();
@@ -94,6 +95,7 @@ export default function Approvals() {
                       await api.post(`/approvals/${row.id}/approve`);
                       notify("Request approved", `${row.full_name} can now sign in.`);
                       await load();
+                      refreshBadges();
                     } catch (err) {
                       notifyError("Could not approve", err instanceof Error ? err.message : "Try again.");
                     }
@@ -116,6 +118,7 @@ export default function Approvals() {
                       await api.post(`/approvals/${row.id}/reject`, { reason: reasons[row.id] || "Not approved" });
                       notify("Request rejected", `${row.full_name} was not granted access.`);
                       await load();
+                      refreshBadges();
                     } catch (err) {
                       const text = err instanceof Error ? err.message : "Reject failed";
                       setError(text);

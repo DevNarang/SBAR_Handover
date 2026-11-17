@@ -61,6 +61,20 @@ def _status_filter(status: str | None) -> str:
     return value
 
 
+@router.get("/pending-count")
+def pending_count(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if user.role not in {Role.hod, Role.nursing_superintendent}:
+        return {"count": 0}
+    nurses = db.query(User).filter(User.role == Role.nursing_officer, User.account_status == AccountStatus.pending)
+    if user.role == Role.hod:
+        if not user.department:
+            return {"count": 0}
+        nurses = nurses.filter(User.department == user.department)
+        return {"count": nurses.count()}
+    admins = db.query(User).filter(User.role == Role.hod, User.account_status == AccountStatus.pending).count()
+    return {"count": admins + nurses.count()}
+
+
 @router.get("/admins")
 def list_admin_requests(
     status: str = AccountStatus.pending,
