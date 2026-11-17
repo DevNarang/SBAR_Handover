@@ -54,6 +54,9 @@ export default function Login() {
           </button>
         </form>
         <p className="muted" style={{ marginTop: 16 }}>
+          <Link to="/reset-password">Forgot password?</Link>
+        </p>
+        <p className="muted">
           New staff? <Link to="/signup">Create your account</Link>
         </p>
       </div>

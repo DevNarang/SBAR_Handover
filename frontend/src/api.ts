@@ -63,7 +63,16 @@ export async function downloadFile(path: string, filename: string) {
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const res = await fetch(`/api${path}`, { headers });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    let detail: unknown = await res.text();
+    try {
+      const parsed = JSON.parse(detail as string);
+      detail = parsed?.detail ?? parsed;
+    } catch {
+      /* keep text */
+    }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

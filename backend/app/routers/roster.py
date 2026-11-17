@@ -193,9 +193,19 @@ def list_patient_assignments(
         .all()
         if row.admission_id in {a.id for a in admissions}
     }
-    roster = list_shift_assignments(db, ward_id, shift_type, shift_date)
+    officers = (
+        db.query(User)
+        .join(UserWardAssignment, UserWardAssignment.user_id == User.id)
+        .filter(
+            UserWardAssignment.ward_id == ward_id,
+            User.role == Role.nursing_officer,
+            User.is_active.is_(True),
+        )
+        .order_by(User.full_name)
+        .all()
+    )
     return {
-        "nurses": [{"id": r.nurse_id, "full_name": r.nurse.full_name if r.nurse else ""} for r in roster],
+        "nurses": [{"id": u.id, "full_name": u.full_name} for u in officers],
         "patients": [
             {
                 "admission_id": a.id,
@@ -250,9 +260,26 @@ def assign_patient(
         write_audit(db, user, "unassign_patient", "patient_shift", admission.id, request=request)
         return {"ok": True, "nurse_id": None}
     nurse = db.get(User, int(nurse_id))
+    if not nurse or not nurse.is_active or nurse.role != Role.nursing_officer:
+        raise HTTPException(400, "Choose an active nurse")
+    linked = (
+        db.query(UserWardAssignment)
+        .filter(UserWardAssignment.user_id == nurse.id, UserWardAssignment.ward_id == admission.ward_id)
+        .first()
+    )
+    if not linked:
+        raise HTTPException(400, "That nurse is not assigned to this ward")
     roster_ids = {r.nurse_id for r in list_shift_assignments(db, admission.ward_id, shift_type, shift_date)}
-    if not nurse or nurse.id not in roster_ids:
-        raise HTTPException(400, "Choose a nurse who is rostered on this ward shift")
+    if nurse.id not in roster_ids:
+        db.add(
+            ShiftAssignment(
+                ward_id=admission.ward_id,
+                shift_type=shift_type,
+                shift_date=shift_date,
+                nurse_id=nurse.id,
+                assigned_by_id=user.id,
+            )
+        )
     if existing:
         existing.nurse_id = nurse.id
         existing.assigned_by_id = user.id

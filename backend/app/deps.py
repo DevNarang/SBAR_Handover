@@ -27,7 +27,7 @@ SUPERINTENDENTS = {Role.medical_superintendent, Role.nursing_superintendent}
 REVIEWERS = SUPERINTENDENTS | {Role.hod, Role.nursing_supervisor}
 ADMINS = SUPERINTENDENTS
 HOSPITAL_WIDE = SUPERINTENDENTS | {Role.nursing_supervisor}
-PATIENT_ASSIGNERS = {Role.hod, Role.nursing_supervisor, Role.medical_superintendent}
+PATIENT_ASSIGNERS = {Role.hod, Role.nursing_supervisor, Role.medical_superintendent, Role.nursing_superintendent}
 ASSIGNABLE_ROLES = {Role.nursing_officer, Role.hod, Role.nursing_supervisor, Role.medical_superintendent}
 
 

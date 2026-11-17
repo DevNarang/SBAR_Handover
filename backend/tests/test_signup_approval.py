@@ -152,3 +152,30 @@ def test_department_admin_creates_ward_only_in_own_department(client):
         "password": DEMO_PASSWORD,
         "role": "nursing_officer",
     }).status_code == 403
+
+
+def test_reset_password_from_login_identifiers(client):
+    r = client.post(
+        "/auth/reset-password",
+        json={
+            "email": "nurse.s1@hospital.local",
+            "employee_id": "NO01",
+            "new_password": "NewPass123!",
+            "confirm_password": "NewPass123!",
+        },
+    )
+    assert r.status_code == 200, r.text
+    old = login(client, "nurse.s1@hospital.local")
+    assert old.status_code == 401
+    fresh = client.post("/auth/login", json={"identifier": "nurse.s1@hospital.local", "password": "NewPass123!"})
+    assert fresh.status_code == 200, fresh.text
+    restore = client.post(
+        "/auth/reset-password",
+        json={
+            "email": "nurse.s1@hospital.local",
+            "employee_id": "NO01",
+            "new_password": DEMO_PASSWORD,
+            "confirm_password": DEMO_PASSWORD,
+        },
+    )
+    assert restore.status_code == 200, restore.text

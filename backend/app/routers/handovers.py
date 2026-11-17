@@ -424,6 +424,27 @@ def review(
     return serialize(_load(db, h.id), user, db)
 
 
+@router.get("/by-admission/{admission_id}/report.pdf")
+def admission_report(
+    admission_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    admission = db.get(Admission, admission_id)
+    if not admission:
+        raise HTTPException(404, "Admission not found")
+    assert_ward_access(db, user, admission.ward_id)
+    h = (
+        db.query(Handover)
+        .filter(Handover.admission_id == admission_id)
+        .order_by(Handover.shift_date.desc(), Handover.id.desc())
+        .first()
+    )
+    if not h:
+        raise HTTPException(404, "No handover report yet for this patient")
+    return handover_report(h.id, db, user)
+
+
 @router.get("/{handover_id}/report.pdf")
 def handover_report(
     handover_id: int,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, type Ward } from "../api";
+import { api, downloadFile, type Ward } from "../api";
 import { formatIst } from "../clock";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
@@ -21,6 +21,7 @@ type Board = {
     status: string;
     risk_level: string;
     outgoing_nurse?: string | null;
+    assigned_nurse_id?: number | null;
     assigned_nurse_name?: string | null;
     can_write?: boolean;
   }[];
@@ -51,8 +52,10 @@ export default function WardBoard() {
   const [notes, setNotes] = useState("");
   const [outgoingId, setOutgoingId] = useState<number | "">("");
   const [msg, setMsg] = useState("");
+  const [officers, setOfficers] = useState<{ id: number; full_name: string }[]>([]);
   const wardId = Number(params.get("ward") || user?.ward_ids[0] || 0);
   const shift = params.get("shift") || "";
+  const canAssign = ["hod", "nursing_supervisor", "medical_superintendent", "nursing_superintendent"].includes(user?.role || "");
 
   useEffect(() => {
     api.get<Ward[]>("/wards").then((w) => {
@@ -81,7 +84,40 @@ export default function WardBoard() {
         setOutgoingId(b.outgoing_nurses[0]?.id || "");
       })
       .catch((e) => setMsg(String(e)));
+    api.get<{ id: number; full_name: string }[]>(`/wards/${wardId}/officers`).then(setOfficers).catch(() => setOfficers([]));
   }, [wardId, shift]);
+
+  async function reloadBoard() {
+    if (!wardId || !shift) return;
+    const b = await api.get<Board>(`/wards/${wardId}/board?shift_type=${shift}`);
+    setBoard(b);
+  }
+
+  async function assignNurse(admissionId: number, nurseId: string) {
+    if (!board) return;
+    try {
+      await api.post("/patient-assignments", {
+        admission_id: admissionId,
+        shift_type: board.shift_type,
+        shift_date: board.shift_date,
+        nurse_id: nurseId ? Number(nurseId) : null,
+      });
+      notify("Nurse linked", nurseId ? "This patient is assigned to that nurse for the shift." : "Patient left open for any rostered nurse.");
+      await reloadBoard();
+    } catch (e) {
+      notifyError("Could not assign nurse", String(e));
+    }
+  }
+
+  async function downloadReport(admissionId: number, handoverId: number | null, name: string) {
+    const file = `sbar-${name.replaceAll(" ", "-")}.pdf`;
+    try {
+      if (handoverId) await downloadFile(`/handovers/${handoverId}/report.pdf`, file);
+      else await downloadFile(`/handovers/by-admission/${admissionId}/report.pdf`, file);
+    } catch (e) {
+      notifyError("Could not download report", String(e));
+    }
+  }
 
   const canReceive = Boolean(board?.can_receive);
 
@@ -160,6 +196,7 @@ export default function WardBoard() {
               <th>Risk</th>
               <th>Handover</th>
               <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -173,7 +210,20 @@ export default function WardBoard() {
                   </div>
                 </td>
                 <td>{p.diagnosis}</td>
-                <td>{p.assigned_nurse_name || "Any rostered nurse"}</td>
+                <td>
+                  {canAssign ? (
+                    <select value={p.assigned_nurse_id || ""} onChange={(e) => void assignNurse(p.admission_id, e.target.value)}>
+                      <option value="">Any rostered nurse</option>
+                      {officers.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    p.assigned_nurse_name || "Any rostered nurse"
+                  )}
+                </td>
                 <td>{p.outgoing_nurse || "—"}</td>
                 <td>
                   <span className={`badge ${p.risk_level}`}>{p.risk_level}</span>
@@ -195,6 +245,11 @@ export default function WardBoard() {
                   ) : (
                     <span className="muted">Read-only</span>
                   )}
+                </td>
+                <td>
+                  <button className="btn" onClick={() => void downloadReport(p.admission_id, p.handover_id, p.name)}>
+                    Report
+                  </button>
                 </td>
               </tr>
             ))}

@@ -168,6 +168,13 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class PasswordReset(BaseModel):
+    email: str
+    employee_id: str
+    new_password: str
+    confirm_password: str
+
+
 @router.post("/change-password")
 def change_password(
     body: PasswordChange,
@@ -182,4 +189,24 @@ def change_password(
     user.password_hash = hash_password(body.new_password)
     db.commit()
     write_audit(db, user, "change_password", "user", user.id, request=request)
+    return {"ok": True}
+
+
+@router.post("/reset-password")
+def reset_password(body: PasswordReset, request: Request, db: Session = Depends(get_db)):
+    if body.new_password != body.confirm_password:
+        raise HTTPException(400, "Passwords do not match")
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    email = body.email.strip().lower()
+    employee_id = body.employee_id.strip()
+    user = db.query(User).filter(User.email == email, User.employee_id == employee_id).first()
+    if not user:
+        raise HTTPException(400, "Email and employee ID do not match an account")
+    status_value = user.account_status or AccountStatus.approved
+    if status_value != AccountStatus.approved or not user.is_active:
+        raise HTTPException(400, "This account cannot reset a password until it is approved")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    write_audit(db, user, "reset_password", "user", user.id, request=request)
     return {"ok": True}

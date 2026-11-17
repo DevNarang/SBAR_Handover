@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Ward } from "../api";
+import { api, downloadFile, type Ward } from "../api";
 import { useAuth } from "../auth";
 import { notify, notifyError } from "../notify";
 
@@ -25,6 +25,10 @@ export default function Patients() {
   const [department, setDepartment] = useState(user?.department || "");
   const [form, setForm] = useState({ name: "", age: 50, sex: "female", mrn: "" });
   const [adm, setAdm] = useState({ patient_id: 0, ward_id: 0, bed_number: "", diagnosis: "", reason_for_admission: "" });
+  const [shift, setShift] = useState({ shift_type: "morning", shift_date: "" });
+  const [officersByWard, setOfficersByWard] = useState<Record<number, { id: number; full_name: string }[]>>({});
+  const [assigned, setAssigned] = useState<Record<number, number | null>>({});
+  const canAssign = ["hod", "nursing_supervisor", "medical_superintendent", "nursing_superintendent"].includes(user?.role || "");
 
   const departments = useMemo(() => {
     const names = new Set<string>();
@@ -40,14 +44,16 @@ export default function Patients() {
     : wards;
 
   async function reload() {
-    const [p, a, w] = await Promise.all([
+    const [p, a, w, meta] = await Promise.all([
       api.get<Patient[]>("/patients"),
       api.get<Admission[]>("/admissions"),
       api.get<Ward[]>("/wards"),
+      api.get<{ shift_type: string; shift_date: string }>("/meta/shift"),
     ]);
     setPatients(p);
     setAdmissions(a);
     setWards(w);
+    setShift({ shift_type: meta.shift_type, shift_date: meta.shift_date });
     setAdm((s) => ({
       ...s,
       patient_id: s.patient_id || p[0]?.id || 0,
@@ -57,10 +63,53 @@ export default function Patients() {
           : 0
         : s.ward_id || w[0]?.id || 0,
     }));
+    const wardIds = [...new Set(a.map((row) => row.ward_id))];
+    const nextOfficers: Record<number, { id: number; full_name: string }[]> = {};
+    const nextAssigned: Record<number, number | null> = {};
+    await Promise.all(
+      wardIds.map(async (id) => {
+        const [staff, alloc] = await Promise.all([
+          api.get<{ id: number; full_name: string }[]>(`/wards/${id}/officers`),
+          api.get<{ patients: { admission_id: number; nurse_id: number | null }[] }>(
+            `/patient-assignments?ward_id=${id}&shift_type=${meta.shift_type}&shift_date=${meta.shift_date}`,
+          ),
+        ]);
+        nextOfficers[id] = staff;
+        for (const row of alloc.patients) nextAssigned[row.admission_id] = row.nurse_id;
+      }),
+    );
+    setOfficersByWard(nextOfficers);
+    setAssigned(nextAssigned);
   }
   useEffect(() => {
     void reload();
   }, []);
+
+  async function assignNurse(admissionId: number, nurseId: string) {
+    try {
+      await api.post("/patient-assignments", {
+        admission_id: admissionId,
+        shift_type: shift.shift_type,
+        shift_date: shift.shift_date,
+        nurse_id: nurseId ? Number(nurseId) : null,
+      });
+      notify("Nurse linked", nurseId ? "This patient is assigned to that nurse for the current shift." : "Patient left open for any rostered nurse.");
+      await reload();
+    } catch (err) {
+      notifyError("Could not assign nurse", err instanceof Error ? err.message : "Try again.");
+    }
+  }
+
+  async function downloadReport(admission: Admission) {
+    try {
+      await downloadFile(
+        `/handovers/by-admission/${admission.id}/report.pdf`,
+        `sbar-${(admission.patient?.name || "patient").replaceAll(" ", "-")}.pdf`,
+      );
+    } catch (err) {
+      notifyError("Could not download report", err instanceof Error ? err.message : "No handover yet for this patient.");
+    }
+  }
 
   return (
     <>
@@ -200,6 +249,7 @@ export default function Patients() {
               <th>Patient</th>
               <th>Ward</th>
               <th>Diagnosis</th>
+              <th>Nurse</th>
               <th></th>
             </tr>
           </thead>
@@ -211,6 +261,24 @@ export default function Patients() {
                 <td>{a.ward?.name}</td>
                 <td>{a.diagnosis}</td>
                 <td>
+                  {canAssign ? (
+                    <select value={assigned[a.id] || ""} onChange={(e) => void assignNurse(a.id, e.target.value)}>
+                      <option value="">Any rostered nurse</option>
+                      {(officersByWard[a.ward_id] || []).map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    (officersByWard[a.ward_id] || []).find((n) => n.id === assigned[a.id])?.full_name || "Any rostered nurse"
+                  )}
+                </td>
+                <td>
+                  <div className="inline">
+                  <button className="btn" onClick={() => void downloadReport(a)}>
+                    Report
+                  </button>
                   <button className="btn" onClick={async () => {
                     try {
                       await api.post(`/admissions/${a.id}/discharge`);
@@ -222,6 +290,7 @@ export default function Patients() {
                   }}>
                     Discharge
                   </button>
+                  </div>
                 </td>
               </tr>
             ))}
